@@ -44,6 +44,8 @@
 """
 
 # import modules
+from statistics import mean
+
 import matplotlib as mpl
 import matplotlib.image as img
 import matplotlib.pyplot as plt
@@ -83,57 +85,24 @@ mpl.style.use("seaborn-v0_8-ticks")
     IWP_data,
     IWP_years,
 ) = read_PC1_CERES_20_50_lat_band_from_netcdf(
-    CERES_Cld_dataset_name="Cldarea"
+    CERES_Cld_dataset_num=0
 )
 
-# CERES_Cld_dataset = [
-#     "Cldarea",
-#     "Cldicerad",
-#     "Cldeff_hgth",
-#     "Cldpress_base",
-#     "Cldhgth_top",
-#     "Cldtau",
-#     "Cldtau_lin",
-#     "IWP",
-#     "Cldemissir",
-# ]
+# "Cldarea",
+# "Cldicerad",
+# "Cldeff_hgth",
+# "Cldpress_base",
+# "Cldtau",
+# "Cldtau_lin",
+# "IWP",
+# "Cldemissir",
+
+# 0 for Cldarea dataset, 1 for Cldicerad dataset
+# 2 for Cldtau dataset, 3 for Cldtau_lin dataset, 4 for IWP dataset
+# 5 for Cldemissirad dataset
 
 # use the 2010-2020 PC1 only
 PC_all = PC_all[-11:]
-
-# # read in the correlation coefficient and pvalue
-# data = xr.open_dataset(
-#     "/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/corr_data/correlation_pvalue_PC1_Cldarea.nc"
-# )
-# correlation = data["correlation"].values
-# pvalue = data["p_values"].values
-
-# # Mask the PC1 and Cldarea data where the correlation coefficients are less than 0.45
-# # Assuming PC_years is a dictionary with 666611 arrays and correlation has shape (180, 360)
-# mask = correlation < 0.45
-# mask = mask[110:140, :]
-
-# # We just mask the PC and Cld data for each years
-# # the overall PC and Cld data are not masked
-# for year in range(2017, 2021):
-#     PC_years[year] = np.ma.masked_array(
-#         PC_years[year],
-#         mask=np.repeat(
-#             mask[np.newaxis, ...], 12 * 28, axis=0
-#         ).reshape(12, 28, 30, 360),
-#     )
-#     Cld_years[year] = np.ma.masked_array(
-#         Cld_years[year],
-#         mask=np.repeat(
-#             mask[np.newaxis, ...], 12 * 28, axis=0
-#         ).reshape(12, 28, 30, 360),
-#     )
-#     IWP_years[year] = np.ma.masked_array(
-#         IWP_years[year],
-#         mask=np.repeat(
-#             mask[np.newaxis, ...], 12 * 28, axis=0
-#         ).reshape(12, 28, 30, 360),
-#     )
 
 # Extract the PC1 and Cldarea data for each year
 def extract_PC1_CERES_each_year(
@@ -159,13 +128,19 @@ def extract_PC1_CERES_each_year(
     None
     """
     for year in range(2017, 2021):
-        globals()[f"PC_{year}"] = PC_years[year].reshape(-1, 30, 360)
+        globals()[f"PC_{year}"] = PC_years[year].reshape(
+            -1, 30, 360
+        )
 
     for year in range(2017, 2021):
-        globals()[f"Cld_{year}"] = Cld_years[year].reshape(-1, 30, 360)
+        globals()[f"Cld_{year}"] = Cld_years[year].reshape(
+            -1, 30, 360
+        )
 
     for year in range(2017, 2021):
-        globals()[f"IWP_{year}"] = IWP_years[year].reshape(-1, 30, 360)
+        globals()[f"IWP_{year}"] = IWP_years[year].reshape(
+            -1, 30, 360
+        )
 
 extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
 
@@ -175,8 +150,37 @@ extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
 
 # Implementation for MERRA2 dust AOD
 # extract the data from 2010 to 2014 like above
-data_merra2_2010_2020_new_lon = xr.open_dataset(
-    "/RAID01/data/merra2/merra_2_daily_2010_2020_new_lon.nc"
+data_merra2_2010_2020 = xr.open_dataset(
+    "/RAID01/data/merra2/merra_2_daily_2010_2020.nc"
+)
+
+data_merra2_2010_2020 = data_merra2_2010_2020.where(
+    data_merra2_2010_2020 >= 0, 0
+)
+
+# Find the index where the longitude values change from negative to positive
+lon_0_index = (data_merra2_2010_2020.lon >= 0).argmax().values
+
+# Slice the dataset into two parts
+left_side = data_merra2_2010_2020.isel(lon=slice(0, lon_0_index))
+right_side = data_merra2_2010_2020.isel(
+    lon=slice(lon_0_index, None)
+)
+
+# Change the longitude values to the 0 to 360 range
+left_side = left_side.assign_coords(lon=(left_side.lon + 360) % 360)
+right_side = right_side.assign_coords(
+    lon=(right_side.lon + 360) % 360
+)
+
+# Concatenate the left and right sides
+data_merra2_2010_2020_new_lon = xr.concat(
+    [right_side, left_side], dim="lon"
+)
+
+# Sort the dataset by the new longitude values
+data_merra2_2010_2020_new_lon = (
+    data_merra2_2010_2020_new_lon.sortby("lon")
 )
 
 # Extract Dust aerosol data for 2020 and 2017-2019
@@ -196,9 +200,13 @@ Dust_AOD_2017_2019 = (
 # Concatenate the data for PC as 2017-2019
 PC_2017_2019 = np.concatenate([PC_2017, PC_2018, PC_2019], axis=0)
 # Do so for Cldarea data
-Cld_2017_2019 = np.concatenate([Cld_2017, Cld_2018, Cld_2019], axis=0)
+Cld_2017_2019 = np.concatenate(
+    [Cld_2017, Cld_2018, Cld_2019], axis=0
+)
 # Do so for IWP data
-IWP_2017_2019 = np.concatenate([IWP_2017, IWP_2018, IWP_2019], axis=0)
+IWP_2017_2019 = np.concatenate(
+    [IWP_2017, IWP_2018, IWP_2019], axis=0
+)
 
 # ------ Segmentation of cloud data within each PC interval ---------------------------------
 # Set the largest and smallest 5% of the data to nan
@@ -222,6 +230,13 @@ def set_extreme_5_percent_to_nan(data_array):
     
     return data_array_filtered
 
+# Assuming Dust_AOD, IWP_data, and Cld_all are your input arrays with shape (3686, 180, 360)
+Dust_AOD_filtered = set_extreme_5_percent_to_nan(Dust_AOD)
+IWP_all_filtered = set_extreme_5_percent_to_nan(IWP_data)
+Cld_all_HCF_filtered = set_extreme_5_percent_to_nan(Cld_all_HCF)
+Cld_all_IPR_filtered = set_extreme_5_percent_to_nan(Cld_all_IPR)
+Cld_all_CEH_filtered = set_extreme_5_percent_to_nan(Cld_all_CEH)
+PC_all_filtered = set_extreme_5_percent_to_nan(PC_all)
 
 #### triout for IWP constrain the same time with PC1 gap constrain ####
 
@@ -231,19 +246,11 @@ def set_extreme_5_percent_to_nan(data_array):
 # first we need to divide IWP data and PC1 data into n intervals
 # this step is aimed to create pcolormesh plot for PC1 and IWP data
 # Divide 1, IWP data
-# filter the extreme 5% data
-Cld_temp = np.concatenate([Cld_2017_2019, Cld_2020], axis=0)
-Cld_temp = set_extreme_5_percent_to_nan(Cld_temp)
-
-Cld_2017_2019 = Cld_temp[:1008, :, :]
-Cld_2020 = Cld_temp[1008:, :, :]
-
-# Divide 1, IWP data
 IWP_temp = np.concatenate([IWP_2017_2019, IWP_2020], axis=0)
 IWP_temp = set_extreme_5_percent_to_nan(IWP_temp)
 
-IWP_2017_2019 = IWP_temp[:1008, :, :]
-IWP_2020 = IWP_temp[1008:, :, :]
+IWP_2017_2019 = IWP_temp[:1095, :, :]
+IWP_2020 = IWP_temp[1095:, :, :]
 
 divide_IWP = DividePCByDataVolume(
     dataarray_main=IWP_temp,
@@ -254,9 +261,6 @@ IWP_gap = divide_IWP.main_gap()
 # Divide 2, PC1 data
 PC_temp = np.concatenate([PC_2017_2019, PC_2020], axis=0)
 PC_temp = set_extreme_5_percent_to_nan(PC_temp)
-
-PC_2017_2019 = PC_temp[:1008, :, :]
-PC_2020 = PC_temp[1008:, :, :]
 
 divide_PC = DividePCByDataVolume(
     dataarray_main=PC_temp,
@@ -270,9 +274,6 @@ AOD_temp = np.concatenate(
     [Dust_AOD_2017_2019, Dust_AOD_2020], axis=0
 )
 AOD_temp = set_extreme_5_percent_to_nan(AOD_temp)
-
-AOD_2017_2019 = AOD_temp[:1008, :, :]
-AOD_2020 = AOD_temp[1008:, :, :]
 
 divide_AOD = DividePCByDataVolume(
     dataarray_main=AOD_temp,
@@ -380,7 +381,7 @@ def read_filtered_data_out(
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
     PC_match_PC_gap_IWP_AOD_constrain_mean_2020,
 ) = generate_filtered_data_for_all_years(
-    AOD_data=AOD_2020,
+    AOD_data=Dust_AOD_2020,
     IWP_data=IWP_2020,
     PC_all=PC_2020,
     Cld_data_all=Cld_2020,
@@ -396,14 +397,14 @@ save_filtered_data_as_nc(
     AOD_gap,
     IWP_gap,
     PC_gap,
-    save_str="2020_pristine_Cldarea",
+    save_str="2020_hcf",
 )
 
 (
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
     PC_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
 ) = generate_filtered_data_for_all_years(
-    AOD_data=AOD_2017_2019,
+    AOD_data=Dust_AOD_2017_2019,
     IWP_data=IWP_2017_2019,
     PC_all=PC_2017_2019,
     Cld_data_all=Cld_2017_2019,
@@ -418,17 +419,42 @@ save_filtered_data_as_nc(
     AOD_gap,
     IWP_gap,
     PC_gap,
-    save_str="2017_2019_pristine_Cldarea",
+    save_str="2017_2019_hcf",
 )
 
 # Read the filtered data
+# Read the SO4 constrain data
+# Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_SO4 = read_filtered_data_out(
+#     file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_SO4_AOD_pristine.nc"
+# )
+# # Read the OC constrain data
+# Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_OC = read_filtered_data_out(
+#     file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_OC_AOD_pristine.nc"
+# )
+# # Read the Dust constrain data
+# Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust = read_filtered_data_out(
+#     file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine.nc"
+# )
+# # Read the Dust constrain data masked
+# Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_masked = read_filtered_data_out(
+#     file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_mask.nc"
+# )
+
+
 # Read the Dust_AOD constrain data for 2020 and 2017-2019 data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020 = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_pristine_Cldarea.nc"
+Cld_match_PC_gap_IWP_AOD_constrain_mean_2020 = (
+    read_filtered_data_out(
+        file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_hcf.nc"
+    )
 )
 
 Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019 = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_pristine_Cldarea.nc"
+    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_hcf.nc"
+)
+
+# Read the reverse mask data
+Cld_match_PC_gap_IWP_AOD_constrain_mean_Dust_reverse_masked = read_filtered_data_out(
+    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_reverse_mask.nc"
 )
 
 ########################################################################
@@ -589,7 +615,7 @@ def plot_3d_colored_IWP_PC1_AOD_min_max_version(
     aod_range,  # Add this parameter to define the AOD range
     vmin,  # Add this parameter to define the minimum value for the color scale
     vmax,  # Add this parameter to define the maximum value for the color scale
-    cmap,  # Add this parameter to define the custom colormap
+    cmap="Spectral_r",  # Add this parameter to define the custom colormap
 ):
     """
     Create a 3D plot with 2D pcolormesh color fill maps representing high cloud amount for each AOD interval.
@@ -655,7 +681,7 @@ def plot_3d_colored_IWP_PC1_AOD_min_max_version(
         m, shrink=0.3, aspect=9, pad=0.01, label=colobar_label
     )
 
-    ax.view_init(elev=12, azim=-65)
+    ax.view_init(elev=20, azim=-66)
     ax.dist = 12
 
     # Save the figure
@@ -671,7 +697,6 @@ def plot_both_3d_fill_plot_min_max_version(
     colobar_label,
     vmin,  # Add this parameter to define the minimum value for the color scale
     vmax,  # Add this parameter to define the maximum value for the color scale
-    cmap="Spectral_r",
 ):
     """
     This function is basiclly used to call the above main plot function
@@ -699,7 +724,6 @@ def plot_both_3d_fill_plot_min_max_version(
         (0, 3),
         vmin,  # Add this parameter to define the minimum value for the color scale
         vmax,  # Add this parameter to define the maximum value for the color scale
-        cmap=cmap,
     )
     plot_3d_colored_IWP_PC1_AOD_min_max_version(
         Cld_match_PC_gap_IWP_AOD_constrain_mean,
@@ -712,199 +736,124 @@ def plot_both_3d_fill_plot_min_max_version(
         (3, 6),
         vmin,  # Add this parameter to define the minimum value for the color scale
         vmax,  # Add this parameter to define the maximum value for the color scale
-        cmap=cmap,
     )
 
+# Call the function with different AOD ranges and save each figure separately
+# Plot the dust-AOD constrained data
+plot_both_3d_fill_plot(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust,
+    "Dust-AOD",
+    "PC1",
+    "IWP",
+)
+
+# Masked version
+plot_both_3d_fill_plot(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_masked,
+    "Dust-AOD",
+    "PC1",
+    "IWP",
+)
+
+# Reverse-masked version
+plot_both_3d_fill_plot(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_Dust_reverse_masked,
+    "Dust-AOD",
+    "PC1",
+    "IWP",
+)
+
+# Plot the reverse mask constrained data to test
+plot_both_3d_fill_plot(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_Dust_reverse_masked,
+    "Dust-AOD",
+    "PC1",
+    "IWP",
+)
+
+# SO4 AOD constrained data
+# Plot the dust-AOD constrained data
+plot_both_3d_fill_plot(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_SO4,
+    "SO4-AOD",
+    "PC1",
+    "IWP",
+)
+
+# OC AOD constrained data
+# Plot the dust-AOD constrained data
+plot_both_3d_fill_plot(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_OC,
+    "OC-AOD",
+    "PC1",
+    "IWP",
+)
 
 # Call the function with different AOD ranges and save each figure separately
-# Plot the dust-AOD constrained hcf data
+# Plot the dust-AOD constrained data
+# high cloud area
+
 # 2020 filtered data
 plot_both_3d_fill_plot_min_max_version(
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "HCF (%)",
-    vmin=0,
-    vmax=23,
-)
-
-# 2017-2019 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "HCF (%)",
-    vmin=0,
-    vmax=23,
-)
-
-# Plot the dust-AOD constrained ice effective radius data
-# 2020 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "IPR (micron)",
-    vmin=20,
-    vmax=35,
-)
-
-# 2017-2019 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "IPR (micron)",
-    vmin=22,
-    vmax=34.5,
-)
-
-# Plot the dust-AOD constrained cloud effective height data
-# 2020 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CEH (km)",
-    vmin=10.3,
-    vmax=14.6,
-)
-
-# 2017-2019 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CEH (km)",
-    vmin=10.4,
-    vmax=14.7,
-)
-
-# Plot the dust-AOD constrained cloud top height data
-# 2020 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CTH (km)",
-    vmin=12.1,
-    vmax=14.9,
-)
-
-# 2017-2019 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CTH (km)",
-    vmin=12.1,
-    vmax=14.9,
-)
-
-# Plot the dust-AOD constrained cloud emissivity data
-# 2020 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CEMIS",
-    vmin=0,
-    vmax=0.27,
-)
-
-# 2017-2019 filtered data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CEMIS",
-    vmin=0,
-    vmax=0.27,
-)
-
-# ------------------------------------------------------------------------------------------
-# 2020 - (2017-2019) filtered data
-# plot the HCF data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020
-    - Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "HCF (%)",
-    vmin=-3.3,
-    vmax=3.3,
-    cmap="RdBu_r",
-)
-
-# plot the IER data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020
-    - Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
     "Dust-AOD",
     "PC1",
     "IWP",
     "IER (micron)",
-    vmin=-3.4,
-    vmax=3.4,
-    cmap="RdBu_r",
+    vmin=12,
+    vmax=15,
 )
 
-# plot the CEH data
+# 2017-2019 filtered data
+plot_both_3d_fill_plot_min_max_version(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    "Dust-AOD",
+    "PC1",
+    "IWP",
+    "IER (micron)",
+    vmin=12,
+    vmax=15,
+)
+
+# 2020 - (2017-2019) filtered data
 plot_both_3d_fill_plot_min_max_version(
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020
     - Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
     "Dust-AOD",
     "PC1",
     "IWP",
-    "CEH (km)",
-    vmin=-1,
-    vmax=1,
-    cmap="RdBu_r",
+    -1.5,
+    1.5,
 )
 
-# plot the cemis data
-plot_both_3d_fill_plot_min_max_version(
+# 2020 - (2017-2019) filtered data
+high_cloud_amount_mean = np.nanmean(
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020
     - Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    axis=(3, 4),
+)
+plot_3d_colored_IWP_PC1_AOD_min_max_version(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020
+    - Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    high_cloud_amount_mean,
     "Dust-AOD",
     "PC1",
     "IWP",
-    "CEMIS",
-    vmin=-0.05,
-    vmax=0.05,
-    cmap="RdBu_r",
+    "Custom_AOD_interval",
+    (4, 6),
+    -1.5,
+    1.5,
 )
 
-# plot the CTH data
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020
-    - Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CTH (km)",
-    vmin=-1.3,
-    vmax=1.3,
-    cmap="RdBu_r",
-)
 
 # -----------------------------------------------------------------------
 # Plot spatial distribution of different AOD gap values
 # -----------------------------------------------------------------------
 # Divide 3, Dust AOD data
 # Divide AOD data as well
-AOD_temp = np.concatenate([Dust_AOD_2017_2019, Dust_AOD_2020], axis=0)
+AOD_temp = np.concatenate(
+    [Dust_AOD_2017_2019, Dust_AOD_2020], axis=0
+)
 divide_AOD = DividePCByDataVolume(
     dataarray_main=AOD_temp,
     n=6,
@@ -912,7 +861,8 @@ divide_AOD = DividePCByDataVolume(
 AOD_gap = divide_AOD.main_gap()
 
 Dust_2017_2020_mean = np.nanmean(
-    np.concatenate([Dust_AOD_2017_2019, Dust_AOD_2020], axis=0), axis=0
+    np.concatenate([Dust_AOD_2017_2019, Dust_AOD_2020], axis=0),
+    axis=0,
 )
 
 
@@ -1044,12 +994,10 @@ def plot_global_spatial_distribution(
 Dust_AOD_2020_mean = np.nanmean(Dust_AOD_2020, axis=0)
 PC_2020_mean = np.nanmean(PC_2020, axis=0)
 Cld_2020_mean = np.nanmean(Cld_2020, axis=0)
-IWP_2020_mean = np.nanmean(IWP_2020, axis=0)
 
 Dust_AOD_2017_2019_mean = np.nanmean(Dust_AOD_2017_2019, axis=0)
 PC_2017_2019_mean = np.nanmean(PC_2017_2019, axis=0)
 Cld_2017_2019_mean = np.nanmean(Cld_2017_2019, axis=0)
-IWP_2017_2019_mean = np.nanmean(IWP_2017_2019, axis=0)
 
 # verify the input data
 plot_global_spatial_distribution(
@@ -1064,13 +1012,9 @@ plot_global_spatial_distribution(
 )
 plot_global_spatial_distribution(
     Cld_2020_mean,
-    "CEH",
-    "CEH Spatial Distribution",
+    "HCF",
+    "HCF Spatial Distribution",
 )
-plot_global_spatial_distribution(
-    IWP_2020_mean, "IWP", "IWP Spatial Distribution"
-)
-
 
 plot_global_spatial_distribution(
     Dust_AOD_2017_2019_mean,
@@ -1084,46 +1028,25 @@ plot_global_spatial_distribution(
 )
 plot_global_spatial_distribution(
     Cld_2017_2019_mean,
-    "CEH",
-    "CEH Spatial Distribution",
+    "HCF",
+    "HCF Spatial Distribution",
 )
+
+PC_all_mean = np.nanmean(PC_all, axis=(0, 1, 2))
+Cld_all_mean = np.nanmean(Cld_all, axis=(0, 1, 2))
+
+
 plot_global_spatial_distribution(
-    IWP_2017_2019_mean, "IWP", "IWP Spatial Distribution"
+    PC_all_mean,
+    "PC1",
+    "PC1 Spatial Distribution",
 )
 
-def plot_statistical_distribution(data, var_name):
-    
-    # Flatten the data
-    flat_data = data.flatten()
-    
-    # Plot histogram and KDE
-    plt.figure(figsize=(12, 6))
-
-    # Plot the histogram
-    sns.histplot(flat_data, kde=False, bins=100, color='blue', alpha=0.6, stat='density', label='Histogram')
-
-    # Plot the KDE
-    sns.kdeplot(flat_data, color='red', lw=2, label='KDE')
-
-    plt.xlabel(var_name)
-    plt.ylabel('Probability Density of ' + var_name)
-    plt.title('Probability Density Function (PDF)')
-    plt.legend()
-    plt.show()
-
-
-# verify the input data
-# 2020
-plot_statistical_distribution(PC_2020, 'PC1')
-plot_statistical_distribution(Cld_2020, 'CEH')
-plot_statistical_distribution(Dust_AOD_2020, 'AOD')
-plot_statistical_distribution(IWP_2020, 'IWP')
-
-# 2017-2019
-plot_statistical_distribution(PC_2017_2019, 'PC1')
-plot_statistical_distribution(Cld_2017_2019, 'CEH')
-plot_statistical_distribution(Dust_AOD_2017_2019, 'AOD')
-plot_statistical_distribution(IWP_2017_2019, 'IWP')
+plot_global_spatial_distribution(
+    Cld_all_mean,
+    "Cld",
+    "Cld Spatial Distribution",
+)
 
 # #######################################################################
 # ###### We only analyze the april to july cld and pc1 data #############

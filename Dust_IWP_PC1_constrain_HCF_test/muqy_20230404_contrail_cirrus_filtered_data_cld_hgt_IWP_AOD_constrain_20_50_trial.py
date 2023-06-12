@@ -245,6 +245,35 @@ IWP_2017_2019 = np.concatenate(
 )
 
 # ------ Segmentation of cloud data within each PC interval ---------------------------------
+# Set the largest and smallest 5% of the data to nan
+def set_extreme_5_percent_to_nan(data_array):
+    
+    # Make a copy of the data array
+    data_array_filtered = np.copy(data_array)
+    
+    # Calculate the threshold values for the largest and smallest 5%
+    try:
+        lower_threshold = np.nanpercentile(data_array, 5)
+    except IndexError:
+        print("ERROR: Data array is empty.")
+        return None
+    else:
+        upper_threshold = np.nanpercentile(data_array, 95)
+    
+    # Set the largest and smallest 5% of the data array to nan
+    data_array_filtered[data_array_filtered < lower_threshold] = np.nan
+    data_array_filtered[data_array_filtered > upper_threshold] = np.nan
+    
+    return data_array_filtered
+
+# Assuming Dust_AOD, IWP_data, and Cld_all are your input arrays with shape (3686, 180, 360)
+Dust_AOD_filtered = set_extreme_5_percent_to_nan(Dust_AOD)
+IWP_all_filtered = set_extreme_5_percent_to_nan(IWP_data)
+Cld_all_HCF_filtered = set_extreme_5_percent_to_nan(Cld_all_HCF)
+Cld_all_IPR_filtered = set_extreme_5_percent_to_nan(Cld_all_IPR)
+Cld_all_CEH_filtered = set_extreme_5_percent_to_nan(Cld_all_CEH)
+PC_all_filtered = set_extreme_5_percent_to_nan(PC_all)
+
 #### triout for IWP constrain the same time with PC1 gap constrain ####
 
 # We try to set an universal PC, AOD, IWP gap for all years
@@ -254,6 +283,11 @@ IWP_2017_2019 = np.concatenate(
 # this step is aimed to create pcolormesh plot for PC1 and IWP data
 # Divide 1, IWP data
 IWP_temp = np.concatenate([IWP_2017_2019, IWP_2020], axis=0)
+IWP_temp = set_extreme_5_percent_to_nan(IWP_temp)
+
+IWP_2017_2019 = IWP_temp[:1095, :, :]
+IWP_2020 = IWP_temp[1095:, :, :]
+
 divide_IWP = DividePCByDataVolume(
     dataarray_main=IWP_temp,
     n=30,
@@ -262,6 +296,8 @@ IWP_gap = divide_IWP.main_gap()
 
 # Divide 2, PC1 data
 PC_temp = np.concatenate([PC_2017_2019, PC_2020], axis=0)
+PC_temp = set_extreme_5_percent_to_nan(PC_temp)
+
 divide_PC = DividePCByDataVolume(
     dataarray_main=PC_temp,
     n=30,
@@ -273,6 +309,8 @@ PC_gap = divide_PC.main_gap()
 AOD_temp = np.concatenate(
     [Dust_AOD_2017_2019, Dust_AOD_2020], axis=0
 )
+AOD_temp = set_extreme_5_percent_to_nan(AOD_temp)
+
 divide_AOD = DividePCByDataVolume(
     dataarray_main=AOD_temp,
     n=6,

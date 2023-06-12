@@ -68,103 +68,8 @@ mpl.rc("font", family="Times New Roman")
 mpl.rcParams["agg.path.chunksize"] = 10000
 mpl.style.use("seaborn-v0_8-ticks")
 
-# ---------- Read PCA&CLD data from netcdf file --------
-
-# ---------- Read in Cloud area data ----------
-# now we read IWP and other cld data (not IWP) from netcdf file
-# triout 1 : Use lattitudinal band from 20N to 50N
-
-(
-    # pc
-    PC_all,
-    PC_years,
-    # cld
-    Cld_all,
-    Cld_years,
-    # iwp
-    IWP_data,
-    IWP_years,
-) = read_PC1_CERES_from_netcdf(CERES_Cld_dataset_name="Cldeff_hgth")
-
-# CERES_Cld_dataset = [
-#     "Cldarea",
-#     "Cldicerad",
-#     "Cldeff_hgth",
-#     "Cldpress_base",
-#     "Cldhgth_top",
-#     "Cldtau",
-#     "Cldtau_lin",
-#     "IWP",
-#     "Cldemissir",
-# ]
-
-# use the 2010-2020 PC1 only
-PC_all = PC_all[-11:]
-PC_all = PC_all.reshape(-1, 180, 360)
-Cld_all = Cld_all.reshape(-1, 180, 360)
-IWP_data = IWP_data.reshape(-1, 180, 360)
-
-
-# Extract the PC1 and Cldarea data for each year
-def extract_PC1_CERES_each_year(
-    PC_years: dict[int, np.ndarray],
-    Cld_years: dict[int, np.ndarray],
-    IWP_years: dict[int, np.ndarray],
-) -> None:
-    """
-    Extracts data for principal component 1 (PC1) and cloud data (CERES) for each year from 2010 to 2020,
-    and assigns these data to global variables with names that include the year.
-
-    Parameters:
-    -----------
-    PC_years: dict[int, np.ndarray]
-        A dictionary containing the principal component 1 data for each year from 2010 to 2020. The keys
-        are integers representing years, and the values are numpy arrays containing the PC1 data.
-    Cld_years: dict[int, np.ndarray]
-        A dictionary containing the CERES cloud data for each year from 2010 to 2020. The keys are integers
-        representing years, and the values are numpy arrays containing the CERES data.
-
-    Returns:
-    --------
-    None
-    """
-    for year in range(2017, 2021):
-        globals()[f"PC_{year}"] = PC_years[year].reshape(-1, 180, 360)
-
-    for year in range(2017, 2021):
-        globals()[f"Cld_{year}"] = Cld_years[year].reshape(
-            -1, 180, 360
-        )
-
-    for year in range(2017, 2021):
-        globals()[f"IWP_{year}"] = IWP_years[year].reshape(
-            -1, 180, 360
-        )
-
-
-extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
-
-#########################################
-##### start seperate time test ##########
-#########################################
-
-# Implementation for MERRA2 dust AOD
-# extract the data from 2010 to 2014 like above
-data_merra2_2010_2020_new_lon = xr.open_dataset(
-    "/RAID01/data/merra2/merra_2_daily_2010_2020_new_lon.nc"
-)
-
-# Extract Dust aerosol data for 2020 and 2017-2019
-Dust_AOD_2010_2020 = (
-    data_merra2_2010_2020_new_lon["DUEXTTAU"]
-    .sel(time=slice("2010", "2021"))
-    .values
-)
-
-# ------ Segmentation of cloud data within each PC interval ---------------------------------
-#### triout for IWP constrain the same time with PC1 gap constrain ####
-
-
+# ----------------------------------
+# Read in filtered data
 def read_filtered_data_out(
     file_name: str = "Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020.nc",
 ):
@@ -176,48 +81,36 @@ def read_filtered_data_out(
 
 
 # Read the filtered data
-# Read the SO4 constrain data
 # Read the Dust constrain data
+# ----------------------------------
+# Pristine filtered data
+# Read the Dust constrain HCF data
 Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_HCF = read_filtered_data_out(
-    file_name="Cldarea_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_4_aod_gaps.nc"
+    file_name="Cldarea_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_6_aod_gaps.nc"
 )
-# Read the SO4 constrain HCF data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_SO4_HCF = read_filtered_data_out(
-    file_name="Cldarea_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_SO4_AOD_pristine_4_aod_gaps.nc"
-)
-
 # Read the Dust constrain cld icerad data
 Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_ICERAD = read_filtered_data_out(
-    file_name="Cldicerad_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_4_aod_gaps.nc"
+    file_name="Cldicerad_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_6_aod_gaps.nc"
 )
 # Read the Dust constrain cld effective hgt data
 Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_EFFHGT = read_filtered_data_out(
-    file_name="Cldeff_hgth_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_4_aod_gaps.nc"
+    file_name="Cldeff_hgth_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_6_aod_gaps.nc"
 )
 
+# ----------------------------------
+# Masked filtered data
 # Read the masked Dust constrain HCF data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_HCF_masked = read_filtered_data_out(
-    file_name="Cldarea_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_mask_4_aod_gaps.nc"
+# Masked the southerrn hemisphere
+Cld_match_PC_gap_IWP_AOD_constrain_filtered_HCF = read_filtered_data_out(
+    file_name="Cldarea_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_mask_polar_south_hemi_extreme_AOD_IWP_5_percent.nc"
 )
 # Read the masked Dust constrain cld icerad data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_ICERAD_masked = read_filtered_data_out(
-    file_name="Cldicerad_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_mask_4_aod_gaps.nc"
+Cld_match_PC_gap_IWP_AOD_constrain_filtered_IPR = read_filtered_data_out(
+    file_name="Cldicerad_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_mask_polar_south_hemi_extreme_AOD_IWP_5_percent.nc"
 )
 # Read the masked Dust constrain cld effective hgt data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_EFFHGT_masked = read_filtered_data_out(
-    file_name="Cldeff_hgth_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_mask_4_aod_gaps.nc"
-)
-
-# --------------------------------- Read the extreme 2.5 % data ---------------------------------
-# Read the filtered extreme 5% data and polar region data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_HCF_no_extreme_polar = read_filtered_data_out(
-    file_name="Cldarea_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_mask_polar_extreme_AOD_IWP_5_percent.nc"
-)
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_ICERAD_no_extreme_polar = read_filtered_data_out(
-    file_name="Cldicerad_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_mask_polar_extreme_AOD_IWP_IPR_5_percent.nc"
-)
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_EFFHGT_no_extreme_polar = read_filtered_data_out(
-    file_name="Cldicerad_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_mask_polar_extreme_AOD_IWP_IPR_5_percent.nc"
+Cld_match_PC_gap_IWP_AOD_constrain_filtered_CEH = read_filtered_data_out(
+    file_name="Cldeff_hgth_match_PC_gap_IWP_AOD_constrain_mean_2010_2020_Dust_AOD_pristine_mask_polar_south_hemi_extreme_AOD_IWP_5_percent.nc"
 )
 
 ######################################################################################
@@ -440,7 +333,7 @@ def plot_3d_colored_IWP_PC1_AOD_min_max_version(
         m, shrink=0.3, aspect=9, pad=0.01, label=colobar_label
     )
 
-    ax.view_init(elev=10, azim=-64)
+    ax.view_init(elev=10, azim=-65)
     ax.dist = 12
 
     # Save the figure
@@ -499,91 +392,95 @@ def plot_both_3d_fill_plot_min_max_version(
 
 
 # Call the function with different AOD ranges and save each figure separately
+# -----------------------------------------------
 # Plot the dust-AOD constrained data
 # high cloud area
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_HCF,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "HCF (%)",
-    vmin=0,
-    vmax=30,
-)
+# plot_both_3d_fill_plot_min_max_version(
+#     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_HCF,
+#     "Dust-AOD",
+#     "PC1",
+#     "IWP",
+#     "HCF (%)",
+#     vmin=0,
+#     vmax=43,
+# )
 
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_SO4_HCF,
-    "SO4-AOD",
-    "PC1",
-    "IWP",
-    "HCF (%)",
-    vmin=0,
-    vmax=55,
-)
+# # ice effective radius
+# plot_both_3d_fill_plot_min_max_version(
+#     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_ICERAD,
+#     "Dust-AOD",
+#     "PC1",
+#     "IWP",
+#     "IPR (micron)",
+#     vmin=14.2,
+#     vmax=34.3,
+# )
 
-# ice effective radius
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_ICERAD,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "IPR (micron)",
-    vmin=14,
-    vmax=35,
-)
-
-# cloud effective height
-plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_EFFHGT,
-    "Dust-AOD",
-    "PC1",
-    "IWP",
-    "CEH (km)",
-    vmin=9.8,
-    vmax=14.8,
-)
+# # cloud effective height
+# plot_both_3d_fill_plot_min_max_version(
+#     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_EFFHGT,
+#     "Dust-AOD",
+#     "PC1",
+#     "IWP",
+#     "CEH (km)",
+#     vmin=9.8,
+#     vmax=14.5,
+# )
 
 # ----------------------------
-# Plot the filtered extreme 5% data and polar regio data
+# Plot the masked data
 # high cloud area
 plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_HCF_no_extreme_polar,
+    Cld_match_PC_gap_IWP_AOD_constrain_filtered_HCF,
     "Dust-AOD",
     "PC1",
     "IWP",
     "HCF (%)",
     vmin=0,
-    vmax=43,
+    vmax=50,
 )
 
 # ice effective radius
+# (filtered ice effective radius)
 plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_ICERAD_no_extreme_polar,
+    Cld_match_PC_gap_IWP_AOD_constrain_filtered_IPR,
     "Dust-AOD",
     "PC1",
     "IWP",
     "IPR (micron)",
-    vmin=22.65,
-    vmax=29.4,
+    vmin=22.7,
+    vmax=30.1,
+)
+
+# unfiltered ice effective radius
+plot_both_3d_fill_plot_min_max_version(
+    Cld_match_PC_gap_IWP_AOD_constrain_filtered_IPR,
+    "Dust-AOD",
+    "PC1",
+    "IWP",
+    "IPR (micron)",
+    vmin=20.8,
+    vmax=34.1,
 )
 
 # cloud effective height
 plot_both_3d_fill_plot_min_max_version(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_Dust_EFFHGT_no_extreme_polar,
+    Cld_match_PC_gap_IWP_AOD_constrain_filtered_CEH,
     "Dust-AOD",
     "PC1",
     "IWP",
     "CEH (km)",
-    vmin=10.4,
-    vmax=14.1,
+    vmin=10.53,
+    vmax=14.4,
 )
+
 
 # -----------------------------------------------------------------------
 # Plot spatial distribution of different AOD gap values
 # -----------------------------------------------------------------------
 # Divide 3, Dust AOD data
 # Divide AOD data as well
-def plot_spatial_distribution(data, var_name, title, AOD_intervals):
+def plot_spatial_distribution(data, var_name, title, AOD_intervals, cmap="jet"):
     from matplotlib.colors import BoundaryNorm
 
     lon = np.linspace(0, 359, 360)
@@ -595,7 +492,7 @@ def plot_spatial_distribution(data, var_name, title, AOD_intervals):
     colors = ["green", "blue", "yellow", "orange", "red", "purple"]
 
     # Create custom colormap
-    cmap = plt.cm.get_cmap("viridis", len(AOD_intervals) - 1)
+    cmap = plt.cm.get_cmap(cmap, len(AOD_intervals) - 1)
 
     # Set up the norm and boundaries for the colormap
     norm = BoundaryNorm(AOD_intervals, cmap.N)
@@ -641,13 +538,40 @@ def plot_spatial_distribution(data, var_name, title, AOD_intervals):
     gl.xlabel_style = {"size": 18}
     gl.ylabel_style = {"size": 18}
 
+# Read the data
+(
+    # pc
+    PC_all,
+    PC_years,
+    # cld
+    Cld_all,
+    Cld_years,
+    # iwp
+    IWP_data,
+    IWP_years,
+) = read_PC1_CERES_from_netcdf(CERES_Cld_dataset_name="Cldicerad")
+
+# CERES_Cld_dataset = [
+#     "Cldarea",
+#     "Cldicerad",
+#     "Cldeff_hgth",
+#     "Cldpress_base",
+#     "Cldhgth_top",
+#     "Cldtau",
+#     "Cldtau_lin",
+#     "IWP",
+#     "Cldemissir",
+# ]
+
+# AOD file
+data_merra2_2010_2020_new_lon = xr.open_dataset("/RAID01/data/merra2/merra_2_daily_2010_2020_new_lon.nc")
 
 # Plot the distribution gap for Dust AOD
 AOD_temp = data_merra2_2010_2020_new_lon["DUEXTTAU"].values
 
 divide_AOD = DividePCByDataVolume(
     dataarray_main=AOD_temp,
-    n=4,
+    n=6,
 )
 AOD_gap = divide_AOD.main_gap()
 
@@ -658,6 +582,7 @@ plot_spatial_distribution(
     var_name="Dust AOD",
     title="Spatial Distribution of Dust AOD Section",
     AOD_intervals=AOD_gap,
+    cmap="RdYlBu_r",
 )
 
 # Plot the distribution gap for IWP
@@ -676,6 +601,7 @@ plot_spatial_distribution(
     var_name="PC1",
     title="Spatial Distribution of PC1 Section",
     AOD_intervals=PC_gap,
+    cmap="RdYlBu_r",
 )
 
 # Plot the distribution gap for PC1
@@ -694,6 +620,7 @@ plot_spatial_distribution(
     var_name="IWP",
     title="Spatial Distribution of IWP Section",
     AOD_intervals=IWP_gap,
+    cmap="RdYlBu_r",
 )
 
 

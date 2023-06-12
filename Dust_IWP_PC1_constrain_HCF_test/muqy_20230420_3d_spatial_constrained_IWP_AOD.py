@@ -3,7 +3,7 @@
 #         _-^##########// (    ) \\##########^-_
 #        -############//  |\^^/|  \\############-
 #      _/############//   (@::@)   \\############\_
-#     /#############((     \\//     ))#############\
+#     /#############((     \\//     ))#############\b
 #    -###############\\    (oo)    //###############-
 #   -#################\\  / VV \  //#################-
 #  -###################\\/      \//###################-
@@ -92,13 +92,22 @@ mpl.style.use("seaborn-v0_8-ticks")
 # use the 2010-2020 PC1 only
 PC_all = PC_all[-11:]
 
-
 # Extract the PC1 and Cldarea data for each year
 def extract_PC1_CERES_each_year(
     PC_years: dict[int, np.ndarray],
     Cld_years: dict[int, np.ndarray],
     IWP_years: dict[int, np.ndarray],
 ) -> None:
+    """ Here is the explanation for the code above:
+    1. We loop over the years from 2017 to 2020, and extract the PC1 data for each year. We assign this data to
+    the global variable 'PC_{year}', where {year} is the year we are currently looping over. Note that we
+    reshape the data to have the shape (n, 30, 360), where n is the number of days in that year.
+    2. We loop over the years from 2017 to 2020, and extract the CERES data for each year. We assign this data to
+    the global variable 'Cld_{year}', where {year} is the year we are currently looping over. Note that we
+    reshape the data to have the shape (n, 30, 360), where n is the number of days in that year.
+    3. We loop over the years from 2017 to 2020, and extract the IWP data for each year. We assign this data to
+    the global variable 'IWP_{year}', where {year} is the year we are currently looping over. Note that we
+    reshape the data to have the shape (n, 30, 360), where n is the number of days in that year. """
     """
     Extracts data for principal component 1 (PC1) and cloud data (CERES) for each year from 2010 to 2020,
     and assigns these data to global variables with names that include the year.
@@ -125,7 +134,6 @@ def extract_PC1_CERES_each_year(
     for year in range(2017, 2021):
         globals()[f"IWP_{year}"] = IWP_years[year].reshape(-1, 30, 360)
 
-
 extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
 
 #########################################
@@ -134,33 +142,8 @@ extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
 
 # Implementation for MERRA2 dust AOD
 # extract the data from 2010 to 2014 like above
-data_merra2_2010_2020 = xr.open_dataset(
-    "../../Data_python/Merra2_data/merra_2_daily_2010_2020.nc"
-)
-
-data_merra2_2010_2020 = data_merra2_2010_2020.where(
-    data_merra2_2010_2020 >= 0, 0
-)
-
-# Find the index where the longitude values change from negative to positive
-lon_0_index = (data_merra2_2010_2020.lon >= 0).argmax().values
-
-# Slice the dataset into two parts
-left_side = data_merra2_2010_2020.isel(lon=slice(0, lon_0_index))
-right_side = data_merra2_2010_2020.isel(lon=slice(lon_0_index, None))
-
-# Change the longitude values to the 0 to 360 range
-left_side = left_side.assign_coords(lon=(left_side.lon + 360) % 360)
-right_side = right_side.assign_coords(lon=(right_side.lon + 360) % 360)
-
-# Concatenate the left and right sides
-data_merra2_2010_2020_new_lon = xr.concat(
-    [right_side, left_side], dim="lon"
-)
-
-# Sort the dataset by the new longitude values
-data_merra2_2010_2020_new_lon = data_merra2_2010_2020_new_lon.sortby(
-    "lon"
+data_merra2_2010_2020_new_lon = xr.open_dataset(
+    "/RAID01/data/merra2/merra_2_daily_2010_2020_new_lon.nc"
 )
 
 # Extract Dust aerosol data for 2020 and 2017-2019
@@ -184,51 +167,27 @@ Cld_2017_2019 = np.concatenate([Cld_2017, Cld_2018, Cld_2019], axis=0)
 # Do so for IWP data
 IWP_2017_2019 = np.concatenate([IWP_2017, IWP_2018, IWP_2019], axis=0)
 
-# ------------------------------------------------------------------------------------------
-# ------ Segmentation of cloud data within each PC interval ---------------------------------
-# ------------------------------------------------------------------------------------------
-#### triout for IWP constrain the same time with PC1 gap constrain ####
-
-# We try to set an universal PC, AOD, IWP gap for all years
-# This is trying to hit all data with the same constrain
-
-# first we need to divide IWP data and PC1 data into n intervals
-# this step is aimed to create pcolormesh plot for PC1 and IWP data
-# Divide 1, IWP data
-IWP_temp = np.concatenate([IWP_2017_2019, IWP_2020], axis=0)
-divide_IWP = DividePCByDataVolume(
-    dataarray_main=IWP_temp,
-    n=30,
-)
-IWP_gap = divide_IWP.main_gap()
-
-# Divide 2, PC1 data
-PC_temp = np.concatenate([PC_2017_2019, PC_2020], axis=0)
-divide_PC = DividePCByDataVolume(
-    dataarray_main=PC_temp,
-    n=30,
-)
-PC_gap = divide_PC.main_gap()
-
-# Divide 3, Dust AOD data
-# Divide AOD data as well
-AOD_temp = np.concatenate([Dust_AOD_2017_2019, Dust_AOD_2020], axis=0)
-divide_AOD = DividePCByDataVolume(
-    dataarray_main=AOD_temp,
-    n=4,
-)
-AOD_gap = divide_AOD.main_gap()
-
 # ------------------------------------------------------
 # ---------- Read the filtered data out ----------------
 # ------------------------------------------------------
 
-
 def read_filtered_data_out(
     file_name: str = "Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020.nc",
 ):
+    """_summary_
+
+    Parameters
+    ----------
+    file_name : str, optional
+        _description_, by default "Cld_match_PC_gap_IWP_AOD_constrain_mean_2010_2020.nc"
+
+    Returns
+    -------
+    _type_
+        _description_
+    """    
     Cld_match_PC_gap_IWP_AOD_constrain_mean = xr.open_dataarray(
-        "../../Data_python/Filtered_data/" + file_name
+        "/RAID01/data/Filtered_data/" + file_name
     )
 
     return Cld_match_PC_gap_IWP_AOD_constrain_mean
@@ -238,31 +197,13 @@ def read_filtered_data_out(
 # Read the Dust_AOD constrain data for 2020 and 2017-2019 data
 # The data shape is (AOD gap, IWP gap, PC gap, lat, lon)
 # And the lat is only for 20N~50N,, the lon is for 0~360
-# Read HCF data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_pristine_Cldarea.nc"
+Cld_match_PC_gap_IWP_AOD_constrain_mean_2020 = read_filtered_data_out(
+    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_filter_extreme_AOD_IWP_IPR_Cldicerad.nc"
 )
 
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_pristine_Cldarea.nc"
+Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019 = read_filtered_data_out(
+    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_filter_extreme_AOD_IWP_IPR_Cldicerad.nc"
 )
-# Read icerad data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_pristine_Cldicerad.nc"
-)
-
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_pristine_Cldicerad.nc"
-)
-# Read cldeff hgt data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_pristine_Cldeff_hgth.nc"
-)
-
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_pristine_Cldeff_hgth.nc"
-)
-
 
 # --------------------------------- Extract the data ----------------------------------------
 # The data shape is (AOD gap, IWP gap, PC gap, lat, lon)
@@ -323,251 +264,221 @@ def extract_specific_filtered_data(
 
     return mean_anormaly_specific
 
-
 # Extract the HCF data
-# Low and mid AOD scenario
-mean_anormaly_specific_IWP_0_cldarea = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea,
+# No AOD constrain
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
     AOD_gap_start=0,
     AOD_gap_end=2,
     IWP_gap_start=0,
-    IWP_gap_end=5,
+    IWP_gap_end=9,
     PC_gap_start=0,
     PC_gap_end=15,
 )
-mean_anormaly_specific_IWP_1_cldarea = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea,
+mean_anormaly_specific_IWP_1 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=2,
+    IWP_gap_end=4,
+    PC_gap_start=0,
+    PC_gap_end=30,
+)
+mean_anormaly_specific_IWP_2 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2, 
+    IWP_gap_start=4,
+    IWP_gap_end=6,
+    PC_gap_start=0,
+    PC_gap_end=30,
+)
+
+# Low AOD scenario
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=0,
+    IWP_gap_end=2,
+    PC_gap_start=0,
+    PC_gap_end=15,
+)
+mean_anormaly_specific_IWP_1 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=2,
+    IWP_gap_end=4,
+    PC_gap_start=0,
+    PC_gap_end=15,
+)
+mean_anormaly_specific_IWP_2 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2, 
+    IWP_gap_start=4,
+    IWP_gap_end=6,
+    PC_gap_start=0,
+    PC_gap_end=15,
+)
+
+# Hiigh AOD scenario
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=4,
+    AOD_gap_end=6,
+    IWP_gap_start=14,
+    IWP_gap_end=17,
+    PC_gap_start=24,
+    PC_gap_end=30,
+)
+mean_anormaly_specific_IWP_1 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=4,
+    AOD_gap_end=6,
+    IWP_gap_start=17,
+    IWP_gap_end=20,
+    PC_gap_start=24,
+    PC_gap_end=30,
+)
+mean_anormaly_specific_IWP_2 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=4,
+    AOD_gap_end=6, 
+    IWP_gap_start=20,
+    IWP_gap_end=23,
+    PC_gap_start=24,
+    PC_gap_end=30,
+)
+
+
+# ----------------------------------------------------------------------
+# Extract the IPR data
+# All IWP scenario
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=0,
+    IWP_gap_end=6,
+    PC_gap_start=0,
+    PC_gap_end=20,
+)
+
+
+# Low AOD scenario only
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=0,
+    IWP_gap_end=2,
+    PC_gap_start=0,
+    PC_gap_end=20,
+)
+mean_anormaly_specific_IWP_1 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=2,
+    IWP_gap_end=4,
+    PC_gap_start=0,
+    PC_gap_end=20,
+)
+mean_anormaly_specific_IWP_2 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=2,
+    IWP_gap_start=4,
+    IWP_gap_end=6,
+    PC_gap_start=0,
+    PC_gap_end=20,
+)
+
+# ---------------------------------------------------------------------
+# Extract the specified CEH data
+# Low AOD scenario
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=4,
+    IWP_gap_start=0,
+    IWP_gap_end=4,
+    PC_gap_start=0,
+    PC_gap_end=21,
+)
+
+# no constraint scenario
+mean_anormaly_specific_IWP_0 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=0,
+    AOD_gap_end=6,
+    IWP_gap_start=0,
+    IWP_gap_end=30,
+    PC_gap_start=0,
+    PC_gap_end=31,
+)
+
+# High AOD scenario
+mean_anormaly_specific_IWP_1 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    AOD_gap_start=5,
+    AOD_gap_end=6,
+    IWP_gap_start=16,
+    IWP_gap_end=22,
+    PC_gap_start=25,
+    PC_gap_end=30,
+)
+
+mean_anormaly_specific_IWP_1 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
     AOD_gap_start=0,
     AOD_gap_end=2,
     IWP_gap_start=5,
     IWP_gap_end=10,
-    PC_gap_start=0,
-    PC_gap_end=15,
+    PC_gap_start=6,
+    PC_gap_end=20,
 )
-mean_anormaly_specific_IWP_2_cldarea = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea,
+mean_anormaly_specific_IWP_2 = extract_specific_filtered_data(
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
     AOD_gap_start=0,
     AOD_gap_end=2,
     IWP_gap_start=10,
     IWP_gap_end=15,
-    PC_gap_start=0,
-    PC_gap_end=15,
-)
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# High AOD scenario
-mean_anormaly_specific_IWP_0_cldarea = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea,
-    AOD_gap_start=2,
-    AOD_gap_end=4,
-    IWP_gap_start=15,
-    IWP_gap_end=19,
-    PC_gap_start=18,
-    PC_gap_end=30,
-)
-mean_anormaly_specific_IWP_1_cldarea = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea,
-    AOD_gap_start=2,
-    AOD_gap_end=4,
-    IWP_gap_start=19,
-    IWP_gap_end=23,
-    PC_gap_start=18,
-    PC_gap_end=30,
-)
-mean_anormaly_specific_IWP_2_cldarea = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldarea,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldarea,
-    AOD_gap_start=2,
-    AOD_gap_end=4,
-    IWP_gap_start=23,
-    IWP_gap_end=27,
-    PC_gap_start=18,
-    PC_gap_end=30,
-)
-
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Extract the IPR data
-# Low and mid AOD scenario
-mean_anormaly_specific_IWP_0_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=0,
-    AOD_gap_end=2,
-    IWP_gap_start=0,
-    IWP_gap_end=3,
-    PC_gap_start=0,
-    PC_gap_end=22,
-)
-mean_anormaly_specific_IWP_1_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=0,
-    AOD_gap_end=2,
-    IWP_gap_start=3,
-    IWP_gap_end=6,
-    PC_gap_start=0,
-    PC_gap_end=22,
-)
-mean_anormaly_specific_IWP_2_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=0,
-    AOD_gap_end=2,
-    IWP_gap_start=6,
-    IWP_gap_end=9,
-    PC_gap_start=0,
-    PC_gap_end=22,
-)
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Mid AOD and Low IWP scenario
-mean_anormaly_specific_IWP_0_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=2,
-    AOD_gap_end=4,
-    IWP_gap_start=0,
-    IWP_gap_end=3,
-    PC_gap_start=4,
+    PC_gap_start=6,
     PC_gap_end=20,
-)
-mean_anormaly_specific_IWP_1_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=2,
-    AOD_gap_end=4,
-    IWP_gap_start=3,
-    IWP_gap_end=6,
-    PC_gap_start=4,
-    PC_gap_end=20,
-)
-mean_anormaly_specific_IWP_2_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=2,
-    AOD_gap_end=4,
-    IWP_gap_start=6,
-    IWP_gap_end=9,
-    PC_gap_start=4,
-    PC_gap_end=20,
-)
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# High AOD High IWP scenario
-mean_anormaly_specific_IWP_0_icerad = extract_specific_filtered_data(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_icerad,
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_icerad,
-    AOD_gap_start=3,
-    AOD_gap_end=4,
-    IWP_gap_start=18,
-    IWP_gap_end=23,
-    PC_gap_start=26,
-    PC_gap_end=30,
-)
-
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Extract the specified CEH data
-# Low AOD scenario
-mean_anormaly_specific_IWP_0_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=0,
-        AOD_gap_end=2,
-        IWP_gap_start=0,
-        IWP_gap_end=3,
-        PC_gap_start=5,
-        PC_gap_end=22,
-    )
-)
-mean_anormaly_specific_IWP_1_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=0,
-        AOD_gap_end=2,
-        IWP_gap_start=3,
-        IWP_gap_end=6,
-        PC_gap_start=5,
-        PC_gap_end=22,
-    )
-)
-mean_anormaly_specific_IWP_2_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=0,
-        AOD_gap_end=2,
-        IWP_gap_start=6,
-        IWP_gap_end=9,
-        PC_gap_start=5,
-        PC_gap_end=22,
-    )
-)
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Mid AOD and Low IWP scenario
-mean_anormaly_specific_IWP_0_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=2,
-        AOD_gap_end=3,
-        IWP_gap_start=0,
-        IWP_gap_end=2,
-        PC_gap_start=5,
-        PC_gap_end=22,
-    )
-)
-mean_anormaly_specific_IWP_1_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=2,
-        AOD_gap_end=3,
-        IWP_gap_start=2,
-        IWP_gap_end=4,
-        PC_gap_start=5,
-        PC_gap_end=22,
-    )
-)
-mean_anormaly_specific_IWP_2_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=2,
-        AOD_gap_end=3,
-        IWP_gap_start=4,
-        IWP_gap_end=6,
-        PC_gap_start=5,
-        PC_gap_end=22,
-    )
-)
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# High AOD and High IWP scenario
-mean_anormaly_specific_IWP_0_cldeff_hgt = (
-    extract_specific_filtered_data(
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_cldeff_hgt,
-        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_cldeff_hgt,
-        AOD_gap_start=3,
-        AOD_gap_end=4,
-        IWP_gap_start=17,
-        IWP_gap_end=26,
-        PC_gap_start=24,
-        PC_gap_end=30,
-    )
 )
 
 # Now the data shape is (lat, lon)
+# We want to plot a 20N~50N, 0~360 map showing cld data 2020-(2017~2019)
 
 ########################################################################################
+########################################################################################
 ### Start spatial distribution plot ####################################################
+########################################################################################
 ########################################################################################
 
 # We want to plot a 20N~50N, 0~360 map showing cld data 2020-(2017~2019)
 # The AOD and IWP and PC1 gap range are selected visially
-
 
 # Plot global spatial distribution of a variable
 def plot_global_spatial_distribution(
@@ -640,114 +551,130 @@ def plot_global_spatial_distribution(
     gl.xlabel_style = {"size": 18}
     gl.ylabel_style = {"size": 18}
 
-
+# ---------------------------------------------------------------------
 # Plot the HCF anormaly data
-# Low AOD scenario
+# Higher IWP constraint
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_0_cldarea,
+    data=mean_anormaly_specific_IWP_0,
     vmin=-1,
     vmax=1,
     var_name="HCF",
-    title="2020 HCF Anormaly",
+    title="2020 HCF Anormaly IWP Low",
 )
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_1_cldarea,
-    vmin=-1.3,
-    vmax=1.3,
+    data=mean_anormaly_specific_IWP_1,
+    vmin=-1,
+    vmax=1,
     var_name="HCF",
-    title="2020 HCF Anormaly",
+    title="2020 HCF Anormaly IWP Mid",
 )
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_2_cldarea,
-    vmin=-3,
-    vmax=3,
+    data=mean_anormaly_specific_IWP_2,
+    vmin=-1,
+    vmax=1,
     var_name="HCF",
-    title="2020 HCF Anormaly",
+    title="2020 HCF Anormaly IWP High",
 )
+
+# Low AOD scenario
+plot_global_spatial_distribution(
+    data=mean_anormaly_specific_IWP_0,
+    vmin=-0.6,
+    vmax=0.6,
+    var_name="HCF",
+    title="2020 HCF Anormaly IWP Low",
+)
+plot_global_spatial_distribution(
+    data=mean_anormaly_specific_IWP_1,
+    vmin=-0.6,
+    vmax=0.6,
+    var_name="HCF",
+    title="2020 HCF Anormaly IWP Mid",
+)
+plot_global_spatial_distribution(
+    data=mean_anormaly_specific_IWP_2,
+    vmin=-0.6,
+    vmax=0.6,
+    var_name="HCF",
+    title="2020 HCF Anormaly IWP High",
+)
+
 # High AOD scenario
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_0_cldarea,
-    vmin=-10,
-    vmax=10,
+    data=mean_anormaly_specific_IWP_0,
+    vmin=-9,
+    vmax=9,
     var_name="HCF",
-    title="2020 HCF Anormaly",
+    title="2020 HCF Anormaly IWP Low",
 )
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_1_cldarea,
-    vmin=-13,
-    vmax=13,
+    data=mean_anormaly_specific_IWP_1,
+    vmin=-9,
+    vmax=9,
     var_name="HCF",
-    title="2020 HCF Anormaly",
+    title="2020 HCF Anormaly IWP Mid",
 )
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_2_cldarea,
-    vmin=-16,
-    vmax=16,
+    data=mean_anormaly_specific_IWP_2,
+    vmin=-9,
+    vmax=9,
     var_name="HCF",
-    title="2020 HCF Anormaly",
+    title="2020 HCF Anormaly IWP High",
 )
 
-# --------------------------------------------------------------------------------------
+# ----------------------------------------------
 # Plot the Icerad anormaly data
+# No constrain scenario
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_0_icerad,
-    vmin=-8,
-    vmax=8,
+    data=mean_anormaly_specific_IWP_0,
+    vmin=-3,
+    vmax=3,
     var_name="IPR",
-    title="2020 IPR Anormaly",
-)
-plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_1_icerad,
-    vmin=-8,
-    vmax=8,
-    var_name="IPR",
-    title="2020 IPR Anormaly",
-)
-plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_2_icerad,
-    vmin=-8,
-    vmax=8,
-    var_name="IPR",
-    title="2020 IPR Anormaly",
-)
-# Plot High AOD and High IWP scenario
-plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_0_icerad,
-    vmin=-7,
-    vmax=7,
-    var_name="IPR",
-    title="2020 IPR Anormaly",
+    title="2020 IPR Anormaly IWP Low",
 )
 
+plot_global_spatial_distribution(
+    data=mean_anormaly_specific_IWP_0,
+    vmin=-5,
+    vmax=5,
+    var_name="IPR",
+    title="2020 IPR Anormaly IWP Low",
+)
+plot_global_spatial_distribution(
+    data=mean_anormaly_specific_IWP_1,
+    vmin=-5,
+    vmax=5,
+    var_name="IPR",
+    title="2020 IPR Anormaly IWP Mid",
+)
+plot_global_spatial_distribution(
+    data=mean_anormaly_specific_IWP_2,
+    vmin=-5,
+    vmax=5,
+    var_name="IPR",
+    title="2020 IPR Anormaly IWP High",
+)
 
+# ----------------------------------------------
 # Plot the CEH anormaly data
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_0_cldeff_hgt,
+    data=mean_anormaly_specific_IWP_0,
     vmin=-2.2,
     vmax=2.2,
     var_name="CEH",
-    title="2020 CEH Anormaly",
+    title="2020 CEH Anormaly AOD Low",
 )
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_1_cldeff_hgt,
-    vmin=-2.2,
-    vmax=2.2,
+    data=mean_anormaly_specific_IWP_1,
+    vmin=-1,
+    vmax=1,
     var_name="CEH",
-    title="2020 CEH Anormaly",
+    title="2020 CEH Anormaly AOD High",
 )
 plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_2_cldeff_hgt,
-    vmin=-2.2,
-    vmax=2.2,
-    var_name="CEH",
-    title="2020 CEH Anormaly",
-)
-# --------------------------------------------------------------------------------------
-# Plot High AOD and High IWP scenario
-plot_global_spatial_distribution(
-    data=mean_anormaly_specific_IWP_0_cldeff_hgt,
-    vmin=-0.7,
-    vmax=0.7,
+    data=mean_anormaly_specific_IWP_2,
+    vmin=-2.5,
+    vmax=2.5,
     var_name="CEH",
     title="2020 CEH Anormaly",
 )

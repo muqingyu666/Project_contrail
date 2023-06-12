@@ -66,76 +66,8 @@ mpl.rc("font", family="Times New Roman")
 mpl.rcParams["agg.path.chunksize"] = 10000
 mpl.style.use("seaborn-v0_8-ticks")
 
-# ---------- Read PCA&CLD data from netcdf file --------
 
-# ---------- Read in Cloud area data ----------
-# now we read IWP and other cld data (not IWP) from netcdf file
-# triout 1 : Use lattitudinal band from 20N to 50N
-
-(
-    # pc
-    PC_all,
-    PC_years,
-    # cld
-    Cld_all,
-    Cld_years,
-    # iwp
-    IWP_data,
-    IWP_years,
-) = read_PC1_CERES_20_50_lat_band_from_netcdf(
-    CERES_Cld_dataset_name="Cldarea"
-)
-
-# CERES_Cld_dataset = [
-#     "Cldarea",
-#     "Cldicerad",
-#     "Cldeff_hgth",
-#     "Cldpress_base",
-#     "Cldhgth_top",
-#     "Cldtau",
-#     "Cldtau_lin",
-#     "IWP",
-#     "Cldemissir",
-# ]
-
-# use the 2010-2020 PC1 only
-PC_all = PC_all[-11:]
-
-# # read in the correlation coefficient and pvalue
-# data = xr.open_dataset(
-#     "/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/corr_data/correlation_pvalue_PC1_Cldarea.nc"
-# )
-# correlation = data["correlation"].values
-# pvalue = data["p_values"].values
-
-# # Mask the PC1 and Cldarea data where the correlation coefficients are less than 0.45
-# # Assuming PC_years is a dictionary with 666611 arrays and correlation has shape (180, 360)
-# mask = correlation < 0.45
-# mask = mask[110:140, :]
-
-# # We just mask the PC and Cld data for each years
-# # the overall PC and Cld data are not masked
-# for year in range(2017, 2021):
-#     PC_years[year] = np.ma.masked_array(
-#         PC_years[year],
-#         mask=np.repeat(
-#             mask[np.newaxis, ...], 12 * 28, axis=0
-#         ).reshape(12, 28, 30, 360),
-#     )
-#     Cld_years[year] = np.ma.masked_array(
-#         Cld_years[year],
-#         mask=np.repeat(
-#             mask[np.newaxis, ...], 12 * 28, axis=0
-#         ).reshape(12, 28, 30, 360),
-#     )
-#     IWP_years[year] = np.ma.masked_array(
-#         IWP_years[year],
-#         mask=np.repeat(
-#             mask[np.newaxis, ...], 12 * 28, axis=0
-#         ).reshape(12, 28, 30, 360),
-#     )
-
-# Extract the PC1 and Cldarea data for each year
+# Extract the PC1 and Cld data for each year
 def extract_PC1_CERES_each_year(
     PC_years: dict[int, np.ndarray],
     Cld_years: dict[int, np.ndarray],
@@ -158,16 +90,21 @@ def extract_PC1_CERES_each_year(
     --------
     None
     """
-    for year in range(2017, 2021):
-        globals()[f"PC_{year}"] = PC_years[year].reshape(-1, 30, 360)
+    extracted_PC_data = {}
+    extracted_Cld_data = {}
+    extracted_IWP_data = {}
 
     for year in range(2017, 2021):
-        globals()[f"Cld_{year}"] = Cld_years[year].reshape(-1, 30, 360)
+        extracted_PC_data[year] = PC_years[year].reshape(-1, 30, 360)
 
     for year in range(2017, 2021):
-        globals()[f"IWP_{year}"] = IWP_years[year].reshape(-1, 30, 360)
+        extracted_Cld_data[year] = Cld_years[year].reshape(-1, 30, 360)
 
-extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
+    for year in range(2017, 2021):
+        extracted_IWP_data[year] = IWP_years[year].reshape(-1, 30, 360)
+
+    return extracted_PC_data, extracted_Cld_data, extracted_IWP_data
+
 
 #########################################
 ##### start seperate time test ##########
@@ -178,107 +115,6 @@ extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
 data_merra2_2010_2020_new_lon = xr.open_dataset(
     "/RAID01/data/merra2/merra_2_daily_2010_2020_new_lon.nc"
 )
-
-# Extract Dust aerosol data for 2020 and 2017-2019
-Dust_AOD_2020 = (
-    data_merra2_2010_2020_new_lon["DUEXTTAU"]
-    .sel(lat=slice(21, 50))
-    .sel(time=slice("2020", "2020"))
-    .values
-)
-Dust_AOD_2017_2019 = (
-    data_merra2_2010_2020_new_lon["DUEXTTAU"]
-    .sel(lat=slice(21, 50))
-    .sel(time=slice("2017", "2019"))
-    .values
-)
-
-# Concatenate the data for PC as 2017-2019
-PC_2017_2019 = np.concatenate([PC_2017, PC_2018, PC_2019], axis=0)
-# Do so for Cldarea data
-Cld_2017_2019 = np.concatenate([Cld_2017, Cld_2018, Cld_2019], axis=0)
-# Do so for IWP data
-IWP_2017_2019 = np.concatenate([IWP_2017, IWP_2018, IWP_2019], axis=0)
-
-# ------ Segmentation of cloud data within each PC interval ---------------------------------
-# Set the largest and smallest 5% of the data to nan
-def set_extreme_5_percent_to_nan(data_array):
-    
-    # Make a copy of the data array
-    data_array_filtered = np.copy(data_array)
-    
-    # Calculate the threshold values for the largest and smallest 5%
-    try:
-        lower_threshold = np.nanpercentile(data_array, 5)
-    except IndexError:
-        print("ERROR: Data array is empty.")
-        return None
-    else:
-        upper_threshold = np.nanpercentile(data_array, 95)
-    
-    # Set the largest and smallest 5% of the data array to nan
-    data_array_filtered[data_array_filtered < lower_threshold] = np.nan
-    data_array_filtered[data_array_filtered > upper_threshold] = np.nan
-    
-    return data_array_filtered
-
-
-#### triout for IWP constrain the same time with PC1 gap constrain ####
-
-# We try to set an universal PC, AOD, IWP gap for all years
-# This is trying to hit all data with the same constrain
-
-# first we need to divide IWP data and PC1 data into n intervals
-# this step is aimed to create pcolormesh plot for PC1 and IWP data
-# Divide 1, IWP data
-# filter the extreme 5% data
-Cld_temp = np.concatenate([Cld_2017_2019, Cld_2020], axis=0)
-Cld_temp = set_extreme_5_percent_to_nan(Cld_temp)
-
-Cld_2017_2019 = Cld_temp[:1008, :, :]
-Cld_2020 = Cld_temp[1008:, :, :]
-
-# Divide 1, IWP data
-IWP_temp = np.concatenate([IWP_2017_2019, IWP_2020], axis=0)
-IWP_temp = set_extreme_5_percent_to_nan(IWP_temp)
-
-IWP_2017_2019 = IWP_temp[:1008, :, :]
-IWP_2020 = IWP_temp[1008:, :, :]
-
-divide_IWP = DividePCByDataVolume(
-    dataarray_main=IWP_temp,
-    n=30,
-)
-IWP_gap = divide_IWP.main_gap()
-
-# Divide 2, PC1 data
-PC_temp = np.concatenate([PC_2017_2019, PC_2020], axis=0)
-PC_temp = set_extreme_5_percent_to_nan(PC_temp)
-
-PC_2017_2019 = PC_temp[:1008, :, :]
-PC_2020 = PC_temp[1008:, :, :]
-
-divide_PC = DividePCByDataVolume(
-    dataarray_main=PC_temp,
-    n=30,
-)
-PC_gap = divide_PC.main_gap()
-
-# Divide 3, Dust AOD data
-# Divide AOD data as well
-AOD_temp = np.concatenate(
-    [Dust_AOD_2017_2019, Dust_AOD_2020], axis=0
-)
-AOD_temp = set_extreme_5_percent_to_nan(AOD_temp)
-
-AOD_2017_2019 = AOD_temp[:1008, :, :]
-AOD_2020 = AOD_temp[1008:, :, :]
-
-divide_AOD = DividePCByDataVolume(
-    dataarray_main=AOD_temp,
-    n=6,
-)
-AOD_gap = divide_AOD.main_gap()
 
 
 def generate_filtered_data_for_all_years(
@@ -375,67 +211,316 @@ def read_filtered_data_out(
     return Cld_match_PC_gap_IWP_AOD_constrain_mean
 
 
-# Load the data
+def filter_extreme_2_5_percent(IWP_data, AOD_data, PC_data, Cld_data):
+    # Calculate the threshold values for the largest and smallest 2.5% of AOD and IWP data
+    lower_threshold_IWP = np.nanpercentile(IWP_data, 2.5)
+    upper_threshold_IWP = np.nanpercentile(IWP_data, 97.5)
+    lower_threshold_AOD = np.nanpercentile(AOD_data, 2.5)
+    upper_threshold_AOD = np.nanpercentile(AOD_data, 97.5)
+
+    # Create a mask for extreme values in AOD and IWP data
+    extreme_mask = (
+        (IWP_data < lower_threshold_IWP)
+        | (IWP_data > upper_threshold_IWP)
+        | (AOD_data < lower_threshold_AOD)
+        | (AOD_data > upper_threshold_AOD)
+    )
+
+    # Apply the mask to IWP, AOD, PC, and CLD data
+    IWP_filtered = np.where(extreme_mask, np.nan, IWP_data)
+    AOD_filtered = np.where(extreme_mask, np.nan, AOD_data)
+    PC_filtered = np.where(extreme_mask, np.nan, PC_data)
+    Cld_filtered = np.where(extreme_mask, np.nan, Cld_data)
+
+    return IWP_filtered, AOD_filtered, PC_filtered, Cld_filtered
+
+
+def filter_extreme_5_percent(IWP_data, AOD_data, PC_data, Cld_data):
+    # Calculate the threshold values for the largest and smallest 2.5% of AOD and IWP data
+    lower_threshold_IWP = np.nanpercentile(IWP_data, 5)
+    upper_threshold_IWP = np.nanpercentile(IWP_data, 95)
+    lower_threshold_AOD = np.nanpercentile(AOD_data, 5)
+    upper_threshold_AOD = np.nanpercentile(AOD_data, 95)
+
+    # Create a mask for extreme values in AOD and IWP data
+    extreme_mask = (
+        (IWP_data < lower_threshold_IWP)
+        | (IWP_data > upper_threshold_IWP)
+        | (AOD_data < lower_threshold_AOD)
+        | (AOD_data > upper_threshold_AOD)
+    )
+
+    # Apply the mask to IWP, AOD, PC, and CLD data
+    IWP_filtered = np.where(extreme_mask, np.nan, IWP_data)
+    AOD_filtered = np.where(extreme_mask, np.nan, AOD_data)
+    PC_filtered = np.where(extreme_mask, np.nan, PC_data)
+    Cld_filtered = np.where(extreme_mask, np.nan, Cld_data)
+
+    return IWP_filtered, AOD_filtered, PC_filtered, Cld_filtered
+
+
+def filter_extreme_5_percent_IPR(Cld_data):
+    # Calculate the threshold values for the largest and smallest 2.5% of AOD and IWP data
+    lower_threshold_IPR = np.nanpercentile(Cld_data, 5)
+    upper_threshold_IPR = np.nanpercentile(Cld_data, 95)
+
+    # Create a mask for extreme values in AOD and IWP data
+    extreme_mask = (
+        (Cld_data < lower_threshold_IPR)
+        | (Cld_data > upper_threshold_IPR)
+    )
+
+    # Apply the mask to IWP, AOD, PC, and CLD data
+    Cld_filtered = np.where(extreme_mask, np.nan, Cld_data)
+
+    return Cld_filtered
+
+
+def process_2020_and_2017_2019(
+    data_merra2, cld_var_name: str = "Cldarea"
+):
+    import gc
+
+    # ---------- Read PCA&CLD data from netcdf file --------
+    # now we read IWP and other cld data (not IWP) from netcdf file
+    # triout 1 : Use lattitudinal band from 20N to 50N
+    # Read the data
+    (
+        # pc
+        PC_all,
+        PC_years,
+        # cld
+        Cld_all,
+        Cld_years,
+        # iwp
+        IWP_data,
+        IWP_years,
+    ) = read_PC1_CERES_20_50_lat_band_from_netcdf(
+        CERES_Cld_dataset_name=cld_var_name
+    )
+
+    # Use the extracted data for further processing and reshape the arrays
+    PC_data = {
+        year: PC_years[year].reshape(-1, 30, 360)
+        for year in range(2017, 2021)
+    }
+    Cld_data = {
+        year: Cld_years[year].reshape(-1, 30, 360)
+        for year in range(2017, 2021)
+    }
+    IWP_data = {
+        year: IWP_years[year].reshape(-1, 30, 360)
+        for year in range(2017, 2021)
+    }
+
+    # Delete the original data to save memory
+    del PC_years, Cld_years, IWP_years
+    gc.collect()
+    
+    # Access the reshaped data using the year as a key
+    PC_2017, PC_2018, PC_2019, PC_2020 = (
+        PC_data[2017],
+        PC_data[2018],
+        PC_data[2019],
+        PC_data[2020],
+    )
+    Cld_2017, Cld_2018, Cld_2019, Cld_2020 = (
+        Cld_data[2017],
+        Cld_data[2018],
+        Cld_data[2019],
+        Cld_data[2020],
+    )
+    IWP_2017, IWP_2018, IWP_2019, IWP_2020 = (
+        IWP_data[2017],
+        IWP_data[2018],
+        IWP_data[2019],
+        IWP_data[2020],
+    )
+
+    # Concatenate the data for PC as 2017-2019
+    PC_2017_2019 = np.concatenate([PC_2017, PC_2018, PC_2019], axis=0)
+    # Do so for Cldarea data
+    Cld_2017_2019 = np.concatenate(
+        [Cld_2017, Cld_2018, Cld_2019], axis=0
+    )
+    # Do so for IWP data
+    IWP_2017_2019 = np.concatenate(
+        [IWP_2017, IWP_2018, IWP_2019], axis=0
+    )
+
+    # Extract Dust aerosol data for 2020 and 2017-2019
+    Dust_AOD_2020 = (
+        data_merra2["DUEXTTAU"]
+        .sel(lat=slice(21, 50))
+        .sel(time=slice("2020", "2020"))
+        .values
+    )
+    Dust_AOD_2017_2019 = (
+        data_merra2["DUEXTTAU"]
+        .sel(lat=slice(21, 50))
+        .sel(time=slice("2017", "2019"))
+        .values
+    )
+
+    # Data read finished
+    # -------------------------------------------------------------------
+    # -------------------------------------------------------------------
+    # filter the extreme 2.5% data for IWP and AOD only
+
+    Cld_temp = np.concatenate([Cld_2017_2019, Cld_2020], axis=0)
+    IWP_temp = np.concatenate([IWP_2017_2019, IWP_2020], axis=0)
+    PC_temp = np.concatenate([PC_2017_2019, PC_2020], axis=0)
+    AOD_temp = np.concatenate(
+        [Dust_AOD_2017_2019, Dust_AOD_2020], axis=0
+    )
+
+    # Assuming IWP_data, Dust_AOD, PC_all, and Cld_all are your input arrays with shape (3686, 180, 360)
+    (
+        IWP_temp_filtered,
+        AOD_temp_filtered,
+        PC_temp_filtered,
+        Cld_temp_filtered,
+    ) = filter_extreme_5_percent(
+        IWP_temp, AOD_temp, PC_temp, Cld_temp
+    )
+
+    if cld_var_name=="Cldicerad":
+        Cld_temp_filtered = filter_extreme_5_percent_IPR(Cld_temp_filtered)
+
+    #### triout for IWP constrain the same time with PC1 gap constrain ####
+
+    # We try to set an universal PC, AOD, IWP gap for all years
+    # This is trying to hit all data with the same constrain
+
+    # first we need to divide IWP data and PC1 data into n intervals
+    # this step is aimed to create pcolormesh plot for PC1 and IWP data
+    # Divide 1, IWP data
+    # filter the extreme 5% data
+    Cld_2017_2019 = Cld_temp_filtered[:1008, :, :]
+    Cld_2020 = Cld_temp_filtered[1008:, :, :]
+
+    # Divide 1, IWP data
+    IWP_2017_2019 = IWP_temp_filtered[:1008, :, :]
+    IWP_2020 = IWP_temp_filtered[1008:, :, :]
+
+    divide_IWP = DividePCByDataVolume(
+        dataarray_main=IWP_temp_filtered,
+        n=30,
+    )
+    IWP_gap = divide_IWP.main_gap()
+
+    # Divide 2, PC1 data
+    PC_2017_2019 = PC_temp_filtered[:1008, :, :]
+    PC_2020 = PC_temp_filtered[1008:, :, :]
+
+    divide_PC = DividePCByDataVolume(
+        dataarray_main=PC_temp_filtered,
+        n=30,
+    )
+    PC_gap = divide_PC.main_gap()
+
+    # Divide 3, Dust AOD data
+    # Divide AOD data as well
+    AOD_2017_2019 = AOD_temp_filtered[:1008, :, :]
+    AOD_2020 = AOD_temp_filtered[1008:, :, :]
+
+    divide_AOD = DividePCByDataVolume(
+        dataarray_main=AOD_temp_filtered,
+        n=6,
+    )
+    AOD_gap = divide_AOD.main_gap()
+
+    # Load the data
+    (
+        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+        PC_match_PC_gap_IWP_AOD_constrain_mean_2020,
+    ) = generate_filtered_data_for_all_years(
+        AOD_data=AOD_2020,
+        IWP_data=IWP_2020,
+        PC_all=PC_2020,
+        Cld_data_all=Cld_2020,
+        PC_gap=PC_gap,
+        IWP_gap=IWP_gap,
+        AOD_gap=AOD_gap,
+    )
+
+    # Save the filtered data
+    save_filtered_data_as_nc(
+        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+        PC_match_PC_gap_IWP_AOD_constrain_mean_2020,
+        AOD_gap,
+        IWP_gap,
+        PC_gap,
+        save_str="2020_filter_extreme_AOD_IWP_IPR_" + cld_var_name,
+    )
+
+    (
+        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+        PC_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    ) = generate_filtered_data_for_all_years(
+        AOD_data=AOD_2017_2019,
+        IWP_data=IWP_2017_2019,
+        PC_all=PC_2017_2019,
+        Cld_data_all=Cld_2017_2019,
+        PC_gap=PC_gap,
+        IWP_gap=IWP_gap,
+        AOD_gap=AOD_gap,
+    )
+
+    save_filtered_data_as_nc(
+        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+        PC_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+        AOD_gap,
+        IWP_gap,
+        PC_gap,
+        save_str="2017_2019_filter_extreme_AOD_IWP_IPR_" + cld_var_name,
+    )
+
+    # Read the filtered data
+    # Read the Dust_AOD constrain data for 2020 and 2017-2019 data
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020 = read_filtered_data_out(
+        file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_filter_extreme_AOD_IWP_IPR_"
+        + cld_var_name
+        + ".nc"
+    )
+
+    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019 = read_filtered_data_out(
+        file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_filter_extreme_AOD_IWP_IPR_"
+        + cld_var_name
+        + ".nc"
+    )
+
+    return (
+        Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
+        Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
+    )
+
+
 (
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    PC_match_PC_gap_IWP_AOD_constrain_mean_2020,
-) = generate_filtered_data_for_all_years(
-    AOD_data=AOD_2020,
-    IWP_data=IWP_2020,
-    PC_all=PC_2020,
-    Cld_data_all=Cld_2020,
-    PC_gap=PC_gap,
-    IWP_gap=IWP_gap,
-    AOD_gap=AOD_gap,
-)
-
-# Save the filtered data
-save_filtered_data_as_nc(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    PC_match_PC_gap_IWP_AOD_constrain_mean_2020,
-    AOD_gap,
-    IWP_gap,
-    PC_gap,
-    save_str="2020_pristine_Cldarea",
-)
-
-(
     Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    PC_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-) = generate_filtered_data_for_all_years(
-    AOD_data=AOD_2017_2019,
-    IWP_data=IWP_2017_2019,
-    PC_all=PC_2017_2019,
-    Cld_data_all=Cld_2017_2019,
-    PC_gap=PC_gap,
-    IWP_gap=IWP_gap,
-    AOD_gap=AOD_gap,
+) = process_2020_and_2017_2019(
+    data_merra2_2010_2020_new_lon, cld_var_name="Cldicerad"
 )
 
-save_filtered_data_as_nc(
-    Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    PC_match_PC_gap_IWP_AOD_constrain_mean_2017_2019,
-    AOD_gap,
-    IWP_gap,
-    PC_gap,
-    save_str="2017_2019_pristine_Cldarea",
-)
-
-# Read the filtered data
-# Read the Dust_AOD constrain data for 2020 and 2017-2019 data
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2020 = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2020_pristine_Cldarea.nc"
-)
-
-Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019 = read_filtered_data_out(
-    file_name="Cld_match_PC_gap_IWP_AOD_constrain_mean_2017_2019_pristine_Cldarea.nc"
-)
+# CERES_Cld_dataset = [
+#     "Cldarea",
+#     "Cldicerad",
+#     "Cldeff_hgth",
+#     "Cldpress_base",
+#     "Cldhgth_top",
+#     "Cldtau",
+#     "Cldtau_lin",
+#     "IWP",
+#     "Cldemissir",
+# ]
 
 ########################################################################
 # ------------------------------------------------------------------
 # Plot 4D plot to demenstrate the constrain of PC1, IWP, Dust AOD
 # ------------------------------------------------------------------
 ########################################################################
+
 
 # version 3
 # Seperate the 3D plot into 2 subplots by AOD interval
@@ -726,7 +811,7 @@ plot_both_3d_fill_plot_min_max_version(
     "IWP",
     "HCF (%)",
     vmin=0,
-    vmax=23,
+    vmax=40,
 )
 
 # 2017-2019 filtered data
@@ -737,7 +822,7 @@ plot_both_3d_fill_plot_min_max_version(
     "IWP",
     "HCF (%)",
     vmin=0,
-    vmax=23,
+    vmax=42,
 )
 
 # Plot the dust-AOD constrained ice effective radius data
@@ -748,8 +833,8 @@ plot_both_3d_fill_plot_min_max_version(
     "PC1",
     "IWP",
     "IPR (micron)",
-    vmin=20,
-    vmax=35,
+    vmin=23,
+    vmax=30.5,
 )
 
 # 2017-2019 filtered data
@@ -759,8 +844,8 @@ plot_both_3d_fill_plot_min_max_version(
     "PC1",
     "IWP",
     "IPR (micron)",
-    vmin=22,
-    vmax=34.5,
+    vmin=23,
+    vmax=30.5,
 )
 
 # Plot the dust-AOD constrained cloud effective height data
@@ -771,7 +856,7 @@ plot_both_3d_fill_plot_min_max_version(
     "PC1",
     "IWP",
     "CEH (km)",
-    vmin=10.3,
+    vmin=10.4,
     vmax=14.6,
 )
 
@@ -842,8 +927,8 @@ plot_both_3d_fill_plot_min_max_version(
     "PC1",
     "IWP",
     "HCF (%)",
-    vmin=-3.3,
-    vmax=3.3,
+    vmin=-3.5,
+    vmax=3.5,
     cmap="RdBu_r",
 )
 
@@ -854,9 +939,9 @@ plot_both_3d_fill_plot_min_max_version(
     "Dust-AOD",
     "PC1",
     "IWP",
-    "IER (micron)",
-    vmin=-3.4,
-    vmax=3.4,
+    "IPR (micron)",
+    vmin=-3.2,
+    vmax=3.2,
     cmap="RdBu_r",
 )
 
@@ -868,8 +953,8 @@ plot_both_3d_fill_plot_min_max_version(
     "PC1",
     "IWP",
     "CEH (km)",
-    vmin=-1,
-    vmax=1,
+    vmin=-0.8,
+    vmax=0.8,
     cmap="RdBu_r",
 )
 
@@ -1091,39 +1176,47 @@ plot_global_spatial_distribution(
     IWP_2017_2019_mean, "IWP", "IWP Spatial Distribution"
 )
 
+
 def plot_statistical_distribution(data, var_name):
-    
     # Flatten the data
     flat_data = data.flatten()
-    
+
     # Plot histogram and KDE
     plt.figure(figsize=(12, 6))
 
     # Plot the histogram
-    sns.histplot(flat_data, kde=False, bins=100, color='blue', alpha=0.6, stat='density', label='Histogram')
+    sns.histplot(
+        flat_data,
+        kde=False,
+        bins=100,
+        color="blue",
+        alpha=0.6,
+        stat="density",
+        label="Histogram",
+    )
 
     # Plot the KDE
-    sns.kdeplot(flat_data, color='red', lw=2, label='KDE')
+    sns.kdeplot(flat_data, color="red", lw=2, label="KDE")
 
     plt.xlabel(var_name)
-    plt.ylabel('Probability Density of ' + var_name)
-    plt.title('Probability Density Function (PDF)')
+    plt.ylabel("Probability Density of " + var_name)
+    plt.title("Probability Density Function (PDF)")
     plt.legend()
     plt.show()
 
 
 # verify the input data
 # 2020
-plot_statistical_distribution(PC_2020, 'PC1')
-plot_statistical_distribution(Cld_2020, 'CEH')
-plot_statistical_distribution(Dust_AOD_2020, 'AOD')
-plot_statistical_distribution(IWP_2020, 'IWP')
+plot_statistical_distribution(PC_2020, "PC1")
+plot_statistical_distribution(Cld_2020, "CEH")
+plot_statistical_distribution(Dust_AOD_2020, "AOD")
+plot_statistical_distribution(IWP_2020, "IWP")
 
 # 2017-2019
-plot_statistical_distribution(PC_2017_2019, 'PC1')
-plot_statistical_distribution(Cld_2017_2019, 'CEH')
-plot_statistical_distribution(Dust_AOD_2017_2019, 'AOD')
-plot_statistical_distribution(IWP_2017_2019, 'IWP')
+plot_statistical_distribution(PC_2017_2019, "PC1")
+plot_statistical_distribution(Cld_2017_2019, "CEH")
+plot_statistical_distribution(Dust_AOD_2017_2019, "AOD")
+plot_statistical_distribution(IWP_2017_2019, "IWP")
 
 # #######################################################################
 # ###### We only analyze the april to july cld and pc1 data #############

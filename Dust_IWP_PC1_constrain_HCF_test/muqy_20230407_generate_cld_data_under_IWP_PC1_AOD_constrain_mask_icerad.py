@@ -81,7 +81,7 @@ mpl.style.use("seaborn-v0_8-ticks")
     # iwp
     IWP_data,
     IWP_years,
-) = read_PC1_CERES_from_netcdf(CERES_Cld_dataset_name="Cldicerad")
+) = read_PC1_CERES_from_netcdf(CERES_Cld_dataset_name="Cldarea")
 
 PC_years = []
 Cld_years = []

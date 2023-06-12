@@ -170,26 +170,23 @@ def read_PC1_CERES_from_netcdf(CERES_Cld_dataset_name):
     # Read data from netcdf file
     print("Reading data from netcdf file...")
     data_cld = xr.open_dataset(
-        "../../Data_python/Cld_data/2010_2020_CERES_high_cloud_data.nc"
+        "/RAID01/data/Cld_data/2010_2020_CERES_high_cloud_data.nc"
     )
     data_pc = xr.open_dataset(
-        "../../Data_python/Filtered_data/1990_2020_4_parameters_300hPa_PC1.nc"
+        "/RAID01/data/PC_data/1990_2020_4_parameters_300hPa_PC1.nc"
     )
-
-    print("Done loading netcdf file.")
 
     PC_all = np.array(data_pc.PC1)
 
     # Arrange data from all years
     PC_all = PC_all.reshape(31, 12, 28, 180, 360)
 
-    PC_years = {}
-    for i, year in enumerate(range(2010, 2021)):
-        PC_years[year] = PC_all[-(11 - i)].astype(np.float32)
-
     # -------------------------------------------------
-    Cld_data = np.array(data_cld[CERES_Cld_dataset_name])
-    IWP_data = np.array(data_cld["IWP"])
+    Cld_data = data_cld[CERES_Cld_dataset_name].values
+    
+    IWP_data = data_cld["IWP"].values
+
+    print("Done loading netcdf file.")
 
     Cld_all = Cld_data.reshape(11, 12, 28, 180, 360)
     IWP_data = IWP_data.reshape(11, 12, 28, 180, 360)
@@ -197,21 +194,29 @@ def read_PC1_CERES_from_netcdf(CERES_Cld_dataset_name):
     Cld_all[Cld_all == -999] = np.nan
     IWP_data[IWP_data == -999] = np.nan
 
+    # -------------------------------------------------
     Cld_years = {}
-    IWP_years = {}
+    IWP_years = {}   
+    PC_years = {}
+    
+    for i, year in enumerate(range(2010, 2021)):
+        PC_years[year] = PC_all[-(11 - i)].astype(np.float32)
+
     for i, year in enumerate(range(2010, 2021)):
         Cld_years[year] = Cld_all[i].astype(np.float32)
+        
+    for i, year in enumerate(range(2010, 2021)):
         IWP_years[year] = IWP_data[i].astype(np.float32)
 
     return (
         # pc
-        PC_all.astype(np.float32),
+        PC_all,
         PC_years,
         # cld
-        Cld_all.astype(np.float32),
+        Cld_all,
         Cld_years,
         # iwp
-        IWP_data.astype(np.float32),
+        IWP_data,
         IWP_years,
     )
 
@@ -254,10 +259,10 @@ def read_PC1_CERES_20_50_lat_band_from_netcdf(
     # Read data from netcdf file
     print("Reading data from netcdf file...")
     data_cld = xr.open_dataset(
-        "../../Data_python/Cld_data/2010_2020_CERES_high_cloud_data.nc"
+        "/RAID01/data/Cld_data/2010_2020_CERES_high_cloud_data.nc"
     )
     data_pc = xr.open_dataset(
-        "../../Data_python/PC_data/1990_2020_4_parameters_300hPa_PC1.nc"
+        "/RAID01/data/PC_data/1990_2020_4_parameters_300hPa_PC1.nc"
     )
 
     print("Done loading netcdf file.")
@@ -265,17 +270,19 @@ def read_PC1_CERES_20_50_lat_band_from_netcdf(
     PC_all = np.array(data_pc.PC1)
 
     # Arrange data from all years
-    PC_all = PC_all.reshape(31, 12, 28, 180, 360)[:, :, :, 110:140, :]
+    PC_all = PC_all.reshape(31, 12, 28, 180, 360)[
+        :, :, :, 110:140, :
+    ]
 
     PC_years = {}
     for i, year in enumerate(range(2017, 2021)):
         PC_years[year] = PC_all[-(11 - i)].astype(np.float32)
 
     # -------------------------------------------------
-    Cld_data = np.array(data_cld[CERES_Cld_dataset_name])[
-        :, :, 110:140, :
-    ]
-    IWP_data = np.array(data_cld["IWP"])[:, :, 110:140, :]
+    Cld_data = np.array(
+        data_cld[CERES_Cld_dataset_name]
+    )[:,:,110:140,:]
+    IWP_data = np.array(data_cld["IWP"])[:,:,110:140,:]
 
     Cld_all = Cld_data.reshape(11, 12, 28, 30, 360)
     IWP_data = IWP_data.reshape(11, 12, 28, 30, 360)
@@ -300,6 +307,95 @@ def read_PC1_CERES_20_50_lat_band_from_netcdf(
         IWP_data.astype(np.float32),
         IWP_years,
     )
+
+
+def read_PC1_CERES_20_60_lat_band_from_netcdf(
+    CERES_Cld_dataset_name,
+):
+    """
+    Read the PC1 and CERES data from the netcdf file
+    you can choose the PC1 and CERES data you want to read
+    PC1 data :
+    [0] : 4-para PC1
+    [1] : 5-para PC1
+
+    Cld data :
+    ["Cldarea",
+        "Cldicerad",
+        "Cldtau",
+        "Cldtau_lin",
+        "IWP",
+        "Cldemissir"]
+    using dataset_num
+
+    Args:
+        PC_para_num (int): the number of PC1 parameter
+        0 : 4para PC1
+        1 : 5para PC1
+
+        CERES_Cld_dataset_num (int): 0-5, specify the CERES dataset
+        0 - Cldarea
+        1 - Cldicerad
+        2 - Cldtau
+        3 - Cldtau_lin
+        4 - IWP
+        5 - Cldemissir
+
+    Returns:
+        Specified CERES dataset and PC1 data
+    """
+    # Read data from netcdf file
+    print("Reading data from netcdf file...")
+    data_cld = xr.open_dataset(
+        "/RAID01/data/Cld_data/2010_2020_CERES_high_cloud_data.nc"
+    )
+    data_pc = xr.open_dataset(
+        "/RAID01/data/PC_data/1990_2020_4_parameters_300hPa_PC1.nc"
+    )
+
+    print("Done loading netcdf file.")
+
+    PC_all = np.array(data_pc.PC1)
+
+    # Arrange data from all years
+    PC_all = PC_all.reshape(31, 12, 28, 180, 360)[
+        :, :, :, 110:150, :
+    ]
+
+    PC_years = {}
+    for i, year in enumerate(range(2017, 2021)):
+        PC_years[year] = PC_all[-(11 - i)].astype(np.float32)
+
+    # -------------------------------------------------
+    Cld_data = np.array(
+        data_cld[CERES_Cld_dataset_name]
+    )[:,:,110:150,:]
+    IWP_data = np.array(data_cld["IWP"])[:,:,110:150,:]
+
+    Cld_all = Cld_data.reshape(11, 12, 28, 40, 360)
+    IWP_data = IWP_data.reshape(11, 12, 28, 40, 360)
+
+    Cld_all[Cld_all == -999] = np.nan
+    IWP_data[IWP_data == -999] = np.nan
+
+    Cld_years = {}
+    IWP_years = {}
+    for i, year in enumerate(range(2017, 2021)):
+        Cld_years[year] = Cld_all[i].astype(np.float32)
+        IWP_years[year] = IWP_data[i].astype(np.float32)
+
+    return (
+        # pc
+        PC_all.astype(np.float32),
+        PC_years,
+        # cld
+        Cld_all.astype(np.float32),
+        Cld_years,
+        # iwp
+        IWP_data.astype(np.float32),
+        IWP_years,
+    )
+
 
 
 #########################################################
@@ -332,7 +428,9 @@ def plot_statistic_var(var_data, var_name):
     var_2019 = var_data["2019 7-day moving average"].values
 
     # Convert day of year to datetime
-    dates = pd.date_range(start="1/1/2023", end="12/31/2023", freq="D")
+    dates = pd.date_range(
+        start="1/1/2023", end="12/31/2023", freq="D"
+    )
     dates = dates + pd.Timedelta("6H")
     dates = dates.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -412,7 +510,9 @@ def plot_statistic_var_difference(var_data, var_name):
     var_2019 = var_data["2019 7-day moving average"].values
 
     # Convert day of year to datetime
-    dates = pd.date_range(start="1/1/2023", end="12/31/2023", freq="D")
+    dates = pd.date_range(
+        start="1/1/2023", end="12/31/2023", freq="D"
+    )
     dates = dates + pd.Timedelta("6H")
     dates = dates.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -476,7 +576,9 @@ def plot_statistic_var_difference_fill_time(var_data, var_name):
     aug_limits = (213, 243)  # August 1 to August 31
 
     # Convert day of year to datetime
-    dates = pd.date_range(start="1/1/2023", end="12/31/2023", freq="D")
+    dates = pd.date_range(
+        start="1/1/2023", end="12/31/2023", freq="D"
+    )
     dates = dates + pd.Timedelta("6H")
     dates = dates.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -979,10 +1081,7 @@ def plot_Cld_no_mean_simple_north_polar_self_cmap(
     cld_name,
     cmap_file="/RAID01/data/muqy/color/test.txt",
 ):
-    from cartopy.mpl.ticker import (
-        LatitudeFormatter,
-        LongitudeFormatter,
-    )
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 
     lon = np.linspace(0, 359, 360)
     lat = np.linspace(-90, 89, 180)
@@ -1060,10 +1159,7 @@ def plot_Cld_no_mean_simple_sourth_polar_self_cmap(
     cld_name,
     cmap_file="/RAID01/data/muqy/color/test.txt",
 ):
-    from cartopy.mpl.ticker import (
-        LatitudeFormatter,
-        LongitudeFormatter,
-    )
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 
     lon = np.linspace(0, 359, 360)
     lat = np.linspace(-90, 89, 180)
@@ -1141,10 +1237,7 @@ def plot_Cld_no_mean_simple_sourth_polar_half_hemisphere(
     cld_name,
     cmap_file="/RAID01/data/muqy/color/test.txt",
 ):
-    from cartopy.mpl.ticker import (
-        LatitudeFormatter,
-        LongitudeFormatter,
-    )
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 
     lon = np.linspace(0, 359, 360)
     lat = np.linspace(-90, -1, 90)
@@ -1799,7 +1892,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         shift_array_columns(Cld_data_PC_condition_2_median, 180)
     )
 
-    Cld_data_aux = stats.zscore(shift_array_columns(Cld_data_aux, 180))
+    Cld_data_aux = stats.zscore(
+        shift_array_columns(Cld_data_aux, 180)
+    )
 
     # plot the figure
     fig, axs = plt.subplots(
@@ -2064,9 +2159,15 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
 
     # get the difference between 2019 and 2020 in jan and feb only
     difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
-    difference_2020_2019_mar_apr = difference_2020_2019[60:120, :, :]
-    difference_2020_2019_may_jun = difference_2020_2019[120:180, :, :]
-    difference_2020_2019_jul_aug = difference_2020_2019[180:240, :, :]
+    difference_2020_2019_mar_apr = difference_2020_2019[
+        60:120, :, :
+    ]
+    difference_2020_2019_may_jun = difference_2020_2019[
+        120:180, :, :
+    ]
+    difference_2020_2019_jul_aug = difference_2020_2019[
+        180:240, :, :
+    ]
 
     # 1 - 2 month
     aviation_kmflown_2020_2019_1_2_month = np.nanmean(
@@ -2311,7 +2412,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         if title == "January-February":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_1_2_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_1_2_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2342,7 +2445,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "March-April":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_3_4_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_3_4_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2373,7 +2478,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "May-June":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_5_6_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_5_6_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2404,7 +2511,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "July-August":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_7_8_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_7_8_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2491,9 +2600,15 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
 
     # get the difference between 2019 and 2020 in jan and feb only
     difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
-    difference_2020_2019_mar_apr = difference_2020_2019[60:120, :, :]
-    difference_2020_2019_may_jun = difference_2020_2019[120:180, :, :]
-    difference_2020_2019_jul_aug = difference_2020_2019[180:240, :, :]
+    difference_2020_2019_mar_apr = difference_2020_2019[
+        60:120, :, :
+    ]
+    difference_2020_2019_may_jun = difference_2020_2019[
+        120:180, :, :
+    ]
+    difference_2020_2019_jul_aug = difference_2020_2019[
+        180:240, :, :
+    ]
 
     # 1 - 2 month
     aviation_kmflown_2020_2019_1_2_month = np.nanmean(
@@ -2738,7 +2853,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         if title == "January-February":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_1_2_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_1_2_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2769,7 +2886,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "March-April":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_3_4_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_3_4_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2800,7 +2919,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "May-June":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_5_6_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_5_6_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2831,7 +2952,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "July-August":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_7_8_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_7_8_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -2918,9 +3041,15 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
 
     # get the difference between 2019 and 2020 in jan and feb only
     difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
-    difference_2020_2019_mar_apr = difference_2020_2019[60:120, :, :]
-    difference_2020_2019_may_jun = difference_2020_2019[120:180, :, :]
-    difference_2020_2019_jul_aug = difference_2020_2019[180:240, :, :]
+    difference_2020_2019_mar_apr = difference_2020_2019[
+        60:120, :, :
+    ]
+    difference_2020_2019_may_jun = difference_2020_2019[
+        120:180, :, :
+    ]
+    difference_2020_2019_jul_aug = difference_2020_2019[
+        180:240, :, :
+    ]
 
     # 1 - 2 month
     aviation_kmflown_2020_2019_1_2_month = np.nanmean(
@@ -3190,7 +3319,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         if title == "January-February":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_1_2_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_1_2_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3221,7 +3352,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "March-April":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_3_4_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_3_4_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3252,7 +3385,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "May-June":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_5_6_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_5_6_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3283,7 +3418,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "July-August":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_7_8_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_7_8_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3370,9 +3507,15 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
 
     # get the difference between 2019 and 2020 in jan and feb only
     difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
-    difference_2020_2019_mar_apr = difference_2020_2019[60:120, :, :]
-    difference_2020_2019_may_jun = difference_2020_2019[120:180, :, :]
-    difference_2020_2019_jul_aug = difference_2020_2019[180:240, :, :]
+    difference_2020_2019_mar_apr = difference_2020_2019[
+        60:120, :, :
+    ]
+    difference_2020_2019_may_jun = difference_2020_2019[
+        120:180, :, :
+    ]
+    difference_2020_2019_jul_aug = difference_2020_2019[
+        180:240, :, :
+    ]
 
     # 1 - 2 month
     aviation_kmflown_2020_2019_1_2_month = np.nanmean(
@@ -3423,7 +3566,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         Cld_data_PC_condition_2_median, 180
     )
 
-    Cld_data_aux_proses = shift_array_columns(Cld_data_aux_proses, 180)
+    Cld_data_aux_proses = shift_array_columns(
+        Cld_data_aux_proses, 180
+    )
 
     # plot the figure
     fig, axs = plt.subplots(
@@ -3629,7 +3774,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         if title == "January-February":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_1_2_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_1_2_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3660,7 +3807,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "March-April":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_3_4_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_3_4_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3691,7 +3840,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "May-June":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_5_6_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_5_6_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3722,7 +3873,9 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         elif title == "July-August":
             # calculate the ratio of the two y axis
             zoom_ratio = (
-                np.nanmax(np.abs(aviation_kmflown_2020_2019_7_8_month))
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_7_8_month)
+                )
             ) / (np.abs(y1_min) * 0.9)
 
             # set the secondary y axis parameters
@@ -3787,7 +3940,9 @@ def compare_cld_anormally_in_spec_Lat_smoothed(
 
     def shift_array_columns(arr, n):
         """Shift the columns of an array by n positions."""
-        return np.concatenate((arr[:, :, n:], arr[:, :, :n]), axis=2)
+        return np.concatenate(
+            (arr[:, :, n:], arr[:, :, :n]), axis=2
+        )
 
     # Usage, flip the array 180 degrees
     Cld_data_anormally_each_year = shift_array_columns(
@@ -4179,18 +4334,24 @@ class Filter_data_fit_PC1_gap_plot(object):
             for lon in self.longitude:
                 for gap_num in PC_gap:
                     # Filter Cld data with gap, start and end with giving gap
-                    Cld_match_PC_gap[gap_num, lat, lon] = np.nanmean(
+                    Cld_match_PC_gap[
+                        gap_num, lat, lon
+                    ] = np.nanmean(
                         Cld_data[:, lat, lon][
                             np.where(
                                 (
                                     PC_data[:, lat, lon]
                                     >= (
-                                        np.array(gap_num + var1) * coef
+                                        np.array(gap_num + var1)
+                                        * coef
                                     )
                                 )
                                 & (
                                     PC_data[:, lat, lon]
-                                    < (np.array(gap_num + var2) * coef)
+                                    < (
+                                        np.array(gap_num + var2)
+                                        * coef
+                                    )
                                 )
                             )
                         ]
@@ -4202,12 +4363,16 @@ class Filter_data_fit_PC1_gap_plot(object):
                                 (
                                     PC_data[:, lat, lon]
                                     >= (
-                                        np.array(gap_num + var1) * coef
+                                        np.array(gap_num + var1)
+                                        * coef
                                     )
                                 )
                                 & (
                                     PC_data[:, lat, lon]
-                                    < (np.array(gap_num + var2) * coef)
+                                    < (
+                                        np.array(gap_num + var2)
+                                        * coef
+                                    )
                                 )
                             )
                         ]
@@ -4299,7 +4464,9 @@ class Filter_data_fit_PC1_gap_plot(object):
 
         for i in range(180):
             for j in range(360):
-                Correlation[i, j] = pd.Series(PC_data[:, i, j]).corr(
+                Correlation[i, j] = pd.Series(
+                    PC_data[:, i, j]
+                ).corr(
                     pd.Series(Cld_data[:, i, j]),
                     method="pearson",
                 )
@@ -5299,7 +5466,8 @@ class Filter_data_fit_PC1_gap_plot(object):
         gap_num = Cld_match_PC_gap.shape[0]
         Box = np.zeros(
             (
-                Cld_match_PC_gap.shape[1] * Cld_match_PC_gap.shape[2],
+                Cld_match_PC_gap.shape[1]
+                * Cld_match_PC_gap.shape[2],
                 gap_num,
             )
         )
@@ -5539,7 +5707,8 @@ class Filter_data_fit_PC1_gap_plot_IWP_constrain(object):
         gap_num = Cld_match_PC_gap.shape[0]
         Box = np.zeros(
             (
-                Cld_match_PC_gap.shape[1] * Cld_match_PC_gap.shape[2],
+                Cld_match_PC_gap.shape[1]
+                * Cld_match_PC_gap.shape[2],
                 gap_num,
             )
         )
@@ -5761,13 +5930,13 @@ class Filter_data_fit_PC1_gap_IWP_AOD_constrain(object):
                 len(self.longitude),
             )
         )
-
+        
         # convert data type to float32 to save memory
         Cld_data = Cld_data.astype(np.float32)
         PC_data = PC_data.astype(np.float32)
         IWP_data = IWP_data.astype(np.float32)
         AOD_data = AOD_data.astype(np.float32)
-
+        
         print("Start to process data with multi-threading")
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -5908,18 +6077,24 @@ class FilterAtmosDataFitPCgap(Filter_data_fit_PC1_gap_plot):
             for lon in self.longitude:
                 for gap_num in PC_gap:
                     # Filter Cld data with gap, start and end with giving gap
-                    Atmos_match_PC_gap[gap_num, lat, lon] = np.nanmean(
+                    Atmos_match_PC_gap[
+                        gap_num, lat, lon
+                    ] = np.nanmean(
                         Atmos_data[:, lat, lon][
                             np.where(
                                 (
                                     PC_data[:, lat, lon]
                                     >= (
-                                        np.array(gap_num + var1) * coef
+                                        np.array(gap_num + var1)
+                                        * coef
                                     )
                                 )
                                 & (
                                     PC_data[:, lat, lon]
-                                    < (np.array(gap_num + var2) * coef)
+                                    < (
+                                        np.array(gap_num + var2)
+                                        * coef
+                                    )
                                 )
                             )
                         ]
@@ -6039,7 +6214,9 @@ def compare_cld_between_2020_others(
             for gap in range(start, end):
                 # condition 1 : if both data are not nan, then subtract
                 if (
-                    np.isnan(Cld_all_match_PC_gap_2020[gap, lat, lon])
+                    np.isnan(
+                        Cld_all_match_PC_gap_2020[gap, lat, lon]
+                    )
                     == False
                 ) and (
                     np.isnan(
@@ -6047,7 +6224,9 @@ def compare_cld_between_2020_others(
                     )
                     == False
                 ):
-                    Cld_all_match_PC_gap_2020_sub_others[lat, lon] = (
+                    Cld_all_match_PC_gap_2020_sub_others[
+                        lat, lon
+                    ] = (
                         Cld_all_match_PC_gap_2020[gap, lat, lon]
                         - Cld_all_match_PC_gap_others[gap, lat, lon]
                     )
@@ -6087,7 +6266,9 @@ def compare_cld_between_2020_others_percentile(
     for lat, lon in np.ndindex((rows, cols)):
         for gap in range(start, end):
             value_2020 = Cld_all_match_PC_gap_2020[gap, lat, lon]
-            value_others = Cld_all_match_PC_gap_others[gap, lat, lon]
+            value_others = Cld_all_match_PC_gap_others[
+                gap, lat, lon
+            ]
 
             if (
                 not np.isnan(value_2020)
@@ -6196,4 +6377,6 @@ def save_PCA_data_as_netcdf(PC_filtered, Cld_filtered):
     )
 
     os.makedirs("/RAID01/data/PCA_data/", exist_ok=True)
-    ds.to_netcdf("/RAID01/data/2010_2020_5_parameters_300hPa_PC1.nc")
+    ds.to_netcdf(
+        "/RAID01/data/2010_2020_5_parameters_300hPa_PC1.nc"
+    )
