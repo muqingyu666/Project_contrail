@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"name": "PYTHON_CODE",
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"python.formatting.provider": "black"
+	}
+}

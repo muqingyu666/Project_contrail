@@ -91,6 +91,40 @@ def read_nc_data(file_path):
     return data
 
 
+# def nan_array_normalize(arr):
+#     """
+#     Normalize the array, and fill the nan with 0
+#     :param arr: the array to be normalized
+#     :return: normalized array
+#     """
+#     from sklearn.preprocessing import MinMaxScaler
+
+#     # Get the original shape of the data
+#     original_shape = arr.shape
+
+#     arr_no_nan = np.nan_to_num(arr, nan=0)
+
+#     scaler = MinMaxScaler(feature_range=(-1, 1))
+
+#     scaled_data = scaler.fit_transform(arr_no_nan.reshape(-1, 1)).reshape(original_shape)
+
+#     return scaled_data
+
+
+def nan_array_normalize(arr):
+    """
+    Normalize the array, and fill the nan with 0
+    :param arr: the array to be normalized
+    :return: normalized array
+    """
+
+    arr_no_nan = np.nan_to_num(arr, nan=0)
+
+    scaled_data = stats.zscore(arr_no_nan)
+
+    return scaled_data
+
+
 # ---------- Read PCA&CLD data from netcdf file --------
 def read_PC1_multi_CERES_from_netcdf():
     """
@@ -1883,7 +1917,7 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill(
     plt.show()
 
 
-def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
+def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_z(
     Cld_data_PC_condition_0_mean,
     Cld_data_PC_condition_1_mean,
     Cld_data_PC_condition_2_mean,
@@ -1915,27 +1949,29 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         return np.concatenate((arr[:, n:], arr[:, :n]), axis=1)
 
     # Usage, flip the array 180 degrees
-    Cld_data_PC_condition_0_mean = shift_array_columns(
-        Cld_data_PC_condition_0_mean, 180
+    Cld_data_PC_condition_0_mean = stats.zscore(
+        shift_array_columns(Cld_data_PC_condition_0_mean, 180)
     )
-    Cld_data_PC_condition_1_mean = shift_array_columns(
-        Cld_data_PC_condition_1_mean, 180
+    Cld_data_PC_condition_1_mean = stats.zscore(
+        shift_array_columns(Cld_data_PC_condition_1_mean, 180)
     )
-    Cld_data_PC_condition_2_mean = shift_array_columns(
-        Cld_data_PC_condition_2_mean, 180
-    )
-
-    Cld_data_PC_condition_0_median = shift_array_columns(
-        Cld_data_PC_condition_0_median, 180
-    )
-    Cld_data_PC_condition_1_median = shift_array_columns(
-        Cld_data_PC_condition_1_median, 180
-    )
-    Cld_data_PC_condition_2_median = shift_array_columns(
-        Cld_data_PC_condition_2_median, 180
+    Cld_data_PC_condition_2_mean = stats.zscore(
+        shift_array_columns(Cld_data_PC_condition_2_mean, 180)
     )
 
-    Cld_data_aux = shift_array_columns(Cld_data_aux, 180)
+    Cld_data_PC_condition_0_median = stats.zscore(
+        shift_array_columns(Cld_data_PC_condition_0_median, 180)
+    )
+    Cld_data_PC_condition_1_median = stats.zscore(
+        shift_array_columns(Cld_data_PC_condition_1_median, 180)
+    )
+    Cld_data_PC_condition_2_median = stats.zscore(
+        shift_array_columns(Cld_data_PC_condition_2_median, 180)
+    )
+
+    Cld_data_aux = stats.zscore(
+        shift_array_columns(Cld_data_aux, 180)
+    )
 
     # plot the figure
     fig, axs = plt.subplots(
@@ -2596,6 +2632,913 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
     plt.show()
 
 
+def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_no_compare(
+    Cld_data_PC_condition_0_mean,
+    Cld_data_PC_condition_1_mean,
+    Cld_data_PC_condition_2_mean,
+    Cld_data_PC_condition_0_median,
+    Cld_data_PC_condition_1_median,
+    Cld_data_PC_condition_2_median,
+    Cld_data_aux,
+    Cld_data_name,
+    y_lim_lst,
+    title,
+    step,
+):
+    """
+    Plot mean cld anormaly from lat 20 to 60
+    Now we try 20 to 50 to reduce noise
+
+    Parameters
+    ----------
+    Cld_data : numpy array
+        Cld data from different years, shape in (lat, lon)
+    step : int
+        step of moving average
+    """
+
+    # Test the aviation fly distance data from 2019 and 2020
+    # Data is from "10.1029/2021AV000546"
+    aviation_data_2019 = read_nc_data(
+        file_path="/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/Aviation/data/flight/kmflown_cruising_2019.nc"
+    )
+    aviation_data_2020 = read_nc_data(
+        file_path="/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/Aviation/data/flight/kmflown_cruising_2020.nc"
+    )
+
+    aviation_kmflown_2019 = aviation_data_2019["cruise"]
+    aviation_kmflown_2020 = aviation_data_2020["cruise"]
+
+    # ------------------ get the difference between 2019 and 2020 ------------------
+    difference_2020_2019 = np.empty((240, 180, 360))
+    difference_2020_2019 = np.array(
+        aviation_kmflown_2020[:240, :, :]
+    ) - np.array(aviation_kmflown_2019[:240, :, :])
+
+    # get the difference between 2019 and 2020 in jan and feb only
+    difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
+    difference_2020_2019_mar_apr = difference_2020_2019[
+        60:120, :, :
+    ]
+    difference_2020_2019_may_jun = difference_2020_2019[
+        120:180, :, :
+    ]
+    difference_2020_2019_jul_aug = difference_2020_2019[
+        180:240, :, :
+    ]
+
+    # 1 - 2 month
+    aviation_kmflown_2020_2019_1_2_month = np.nanmean(
+        difference_2020_2019_jan_feb[:, 110:140, :],
+        axis=(0, 1),
+    )
+    # 3 - 4 month
+    aviation_kmflown_2020_2019_3_4_month = np.nanmean(
+        difference_2020_2019_mar_apr[:, 110:140, :],
+        axis=(0, 1),
+    )
+    # 5 - 6 month
+    aviation_kmflown_2020_2019_5_6_month = np.nanmean(
+        difference_2020_2019_may_jun[:, 110:140, :],
+        axis=(0, 1),
+    )
+    # 7 - 8 month
+    aviation_kmflown_2020_2019_7_8_month = np.nanmean(
+        difference_2020_2019_jul_aug[:, 110:140, :],
+        axis=(0, 1),
+    )
+
+    # Deal data to central in 0 longitude
+    mpl.rc("font", family="Times New Roman")
+
+    def shift_array_columns(arr, n):
+        """Shift the columns of an array by n positions."""
+        return np.concatenate((arr[:, n:], arr[:, :n]), axis=1)
+
+    # Usage, flip the array 180 degrees
+    Cld_data_PC_condition_0_mean = shift_array_columns(
+        Cld_data_PC_condition_0_mean, 180
+    )
+    Cld_data_PC_condition_1_mean = shift_array_columns(
+        Cld_data_PC_condition_1_mean, 180
+    )
+    Cld_data_PC_condition_2_mean = shift_array_columns(
+        Cld_data_PC_condition_2_mean, 180
+    )
+
+    Cld_data_PC_condition_0_median = shift_array_columns(
+        Cld_data_PC_condition_0_median, 180
+    )
+    Cld_data_PC_condition_1_median = shift_array_columns(
+        Cld_data_PC_condition_1_median, 180
+    )
+    Cld_data_PC_condition_2_median = shift_array_columns(
+        Cld_data_PC_condition_2_median, 180
+    )
+
+    Cld_data_aux = shift_array_columns(Cld_data_aux, 180)
+
+    # plot the figure
+    fig, axs = plt.subplots(
+        figsize=(18, 15), nrows=3, ncols=1, sharex=True
+    )
+
+    # plot lines
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        np_move_avg(
+            np.nanmean(
+                Cld_data_PC_condition_0_mean[110:140, :], axis=0
+            ),
+            step,
+            mode="same",
+        ),
+        color="#82A6B1",
+        linewidth=2.5,
+        label="Bad Atmospheric Condition (Mean)",
+        alpha=1,
+    )
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        np_move_avg(
+            np.nanmean(
+                Cld_data_PC_condition_0_median[110:140, :], axis=0
+            ),
+            step,
+            mode="same",
+        ),
+        color="#82A6B1",
+        linewidth=2.5,
+        label="Bad Atmospheric Condition (Median)",
+        linestyle="--",
+        alpha=1,
+    )
+
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        np_move_avg(
+            np.nanmean(
+                Cld_data_PC_condition_1_mean[110:140, :], axis=0
+            ),
+            step,
+            mode="same",
+        ),
+        color="#5F97D2",
+        linewidth=2.5,
+        label="Moderate Atmospheric Condition (Mean)",
+        alpha=0.95,
+    )
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        np_move_avg(
+            np.nanmean(
+                Cld_data_PC_condition_1_median[110:140, :], axis=0
+            ),
+            step,
+            mode="same",
+        ),
+        color="#5F97D2",
+        linewidth=2.5,
+        label="Moderate Atmospheric Condition (Median)",
+        linestyle="--",
+        alpha=0.95,
+    )
+
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        np_move_avg(
+            np.nanmean(
+                Cld_data_PC_condition_2_mean[110:140, :], axis=0
+            ),
+            step,
+            mode="same",
+        ),
+        color="#9394E7",
+        linewidth=2.5,
+        label="Good Atmospheric Condition (Mean)",
+        alpha=0.95,
+    )
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        np_move_avg(
+            np.nanmean(
+                Cld_data_PC_condition_2_median[110:140, :], axis=0
+            ),
+            step,
+            mode="same",
+        ),
+        color="#9394E7",
+        linewidth=2.5,
+        label="Good Atmospheric Condition (Median)",
+        linestyle="--",
+        alpha=0.95,
+    )
+
+    # Auxiliary lines representing the data without PC1 constrain and 0
+    # axs[0].plot(
+    #     np.linspace(-180, 179, 360),
+    #     np.nanmean(Cld_data_aux[110:150, :], axis=0),
+    #     color="#D76364",
+    #     label="Without PC constraint",
+    #     linewidth=2.5,
+    # )
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        np.zeros(360),
+        color="Black",
+        # label="Without PC constraint",
+        linewidth=3,
+    )
+    # axs[1].plot(
+    #     np.linspace(-180, 179, 360),
+    #     np.nanmean(Cld_data_aux[110:150, :], axis=0),
+    #     color="#D76364",
+    #     label="Without PC constraint",
+    #     linewidth=2.5,
+    # )
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        np.zeros(360),
+        color="Black",
+        # label="Without PC constraint",
+        linewidth=3,
+    )
+    # axs[2].plot(
+    #     np.linspace(-180, 179, 360),
+    #     np.nanmean(Cld_data_aux[110:150, :], axis=0),
+    #     color="#D76364",
+    #     label="Without PC constraint",
+    #     linewidth=2.5,
+    # )
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        np.zeros(360),
+        color="Black",
+        # label="Without PC constraint",
+        linewidth=3,
+    )
+
+    # set the title
+    axs[0].set_title(title, size=26, y=1.02)
+
+    # set ylim for each subplot
+    # axs[0].set_ylim(y_lim_lst[0])
+    # axs[1].set_ylim(y_lim_lst[1])
+    # axs[2].set_ylim(y_lim_lst[2])
+
+    # adjust the subplots to make it more compact
+    fig.subplots_adjust(hspace=0.05)
+
+    # set the universal x axis parameters
+    # set the xlabel to the longitude axis
+    x_ticks_mark = [
+        "180$^\circ$",
+        "120$^\circ$W",
+        "60$^\circ$W",
+        "0$^\circ$",
+        "60$^\circ$E",
+        "120$^\circ$E",
+        "180$^\circ$",
+    ]
+
+    # set the xticks label
+    x_ticks = [-180, -120, -60, 0, 60, 120, 180]
+    # set the xlim
+    plt.xlim([-180, 180])
+    # set the xticks label
+    plt.xlabel("Longitude", size=23)
+    # set the xticks
+    plt.xticks(x_ticks, x_ticks_mark, fontsize=20)
+
+    # set the y axis parameters
+    for axs in axs:
+        # get the y axis limits first
+        y1_min, y1_max = axs.get_ylim()
+
+        # set the background color
+        axs.set_facecolor("white")
+        # set the legend
+        axs.legend(prop={"size": 20})
+        # axs.set_yticks(fontsize=20, weight="bold")
+        axs.tick_params(axis="y", labelsize=20)
+        axs.set_ylabel(Cld_data_name, size=20)
+
+        # plot the secondary y axis
+        axs_sec_y = axs.twinx()
+
+        # fill between the line of aviation_kmflown_2019_2020_1_2_month and the y axis 0
+        if title == "January-February":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_1_2_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_1_2_month,
+                0,
+                where=aviation_kmflown_2020_2019_1_2_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_1_2_month,
+                0,
+                where=aviation_kmflown_2020_2019_1_2_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+        elif title == "March-April":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_3_4_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_3_4_month,
+                0,
+                where=aviation_kmflown_2020_2019_3_4_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_3_4_month,
+                0,
+                where=aviation_kmflown_2020_2019_3_4_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+        elif title == "May-June":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_5_6_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_5_6_month,
+                0,
+                where=aviation_kmflown_2020_2019_5_6_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_5_6_month,
+                0,
+                where=aviation_kmflown_2020_2019_5_6_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+        elif title == "July-August":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_7_8_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_7_8_month,
+                0,
+                where=aviation_kmflown_2020_2019_7_8_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_7_8_month,
+                0,
+                where=aviation_kmflown_2020_2019_7_8_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+
+    plt.savefig(
+        "/RAID01/data/python_fig/"
+        + Cld_data_name
+        + title
+        + "_mean_median_fill_aviation_no_compare_2017_2019.png",
+        dpi=300,
+        facecolor="white",
+        edgecolor="white",
+        bbox_inches="tight",
+    )
+    plt.show()
+
+
+def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_zscore(
+    Cld_data_PC_condition_0_mean,
+    Cld_data_PC_condition_1_mean,
+    Cld_data_PC_condition_2_mean,
+    Cld_data_PC_condition_0_median,
+    Cld_data_PC_condition_1_median,
+    Cld_data_PC_condition_2_median,
+    Cld_data_aux,
+    Cld_data_name,
+    y_lim_lst,
+    title,
+    step,
+):
+    """
+    Plot mean cld anormaly from lat 20 to 60
+    Now we try 20 to 50 to reduce noise
+
+    Parameters
+    ----------
+    Cld_data : numpy array
+        Cld data from different years, shape in (lat, lon)
+    step : int
+        step of moving average
+    """
+
+    # Test the aviation fly distance data from 2019 and 2020
+    # Data is from "10.1029/2021AV000546"
+    aviation_data_2019 = read_nc_data(
+        file_path="/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/Aviation/data/flight/kmflown_cruising_2019.nc"
+    )
+    aviation_data_2020 = read_nc_data(
+        file_path="/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/Aviation/data/flight/kmflown_cruising_2020.nc"
+    )
+
+    aviation_kmflown_2019 = aviation_data_2019["cruise"]
+    aviation_kmflown_2020 = aviation_data_2020["cruise"]
+
+    # ------------------ get the difference between 2019 and 2020 ------------------
+    difference_2020_2019 = np.empty((240, 180, 360))
+    difference_2020_2019 = np.array(
+        aviation_kmflown_2020[:240, :, :]
+    ) - np.array(aviation_kmflown_2019[:240, :, :])
+
+    # get the difference between 2019 and 2020 in jan and feb only
+    difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
+    difference_2020_2019_mar_apr = difference_2020_2019[
+        60:120, :, :
+    ]
+    difference_2020_2019_may_jun = difference_2020_2019[
+        120:180, :, :
+    ]
+    difference_2020_2019_jul_aug = difference_2020_2019[
+        180:240, :, :
+    ]
+
+    # 1 - 2 month
+    aviation_kmflown_2020_2019_1_2_month = np.nanmean(
+        difference_2020_2019_jan_feb[:, 110:140, :],
+        axis=(0, 1),
+    )
+    # 3 - 4 month
+    aviation_kmflown_2020_2019_3_4_month = np.nanmean(
+        difference_2020_2019_mar_apr[:, 110:140, :],
+        axis=(0, 1),
+    )
+    # 5 - 6 month
+    aviation_kmflown_2020_2019_5_6_month = np.nanmean(
+        difference_2020_2019_may_jun[:, 110:140, :],
+        axis=(0, 1),
+    )
+    # 7 - 8 month
+    aviation_kmflown_2020_2019_7_8_month = np.nanmean(
+        difference_2020_2019_jul_aug[:, 110:140, :],
+        axis=(0, 1),
+    )
+
+    # Deal data to central in 0 longitude
+    mpl.rc("font", family="Times New Roman")
+
+    def shift_array_columns(arr, n):
+        """Shift the columns of an array by n positions."""
+        return np.concatenate((arr[:, n:], arr[:, :n]), axis=1)
+
+    # Usage, flip the array 180 degrees
+    Cld_data_PC_condition_0_mean = shift_array_columns(
+        Cld_data_PC_condition_0_mean, 180
+    )
+
+    Cld_data_PC_condition_1_mean = shift_array_columns(
+        Cld_data_PC_condition_1_mean, 180
+    )
+
+    Cld_data_PC_condition_2_mean = shift_array_columns(
+        Cld_data_PC_condition_2_mean, 180
+    )
+
+    Cld_data_PC_condition_0_median = shift_array_columns(
+        Cld_data_PC_condition_0_median, 180
+    )
+
+    Cld_data_PC_condition_1_median = shift_array_columns(
+        Cld_data_PC_condition_1_median, 180
+    )
+
+    Cld_data_PC_condition_2_median = shift_array_columns(
+        Cld_data_PC_condition_2_median, 180
+    )
+
+    Cld_data_aux = shift_array_columns(Cld_data_aux, 180)
+
+    # plot the figure
+    fig, axs = plt.subplots(
+        figsize=(18, 15), nrows=3, ncols=1, sharex=True
+    )
+
+    # plot lines
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np_move_avg(
+                np.nanmean(
+                    Cld_data_PC_condition_0_mean[110:140, :], axis=0
+                ),
+                step,
+                mode="same",
+            )
+        ),
+        color="#82A6B1",
+        linewidth=2.5,
+        label="Bad Atmospheric Condition (Mean)",
+        alpha=1,
+    )
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np_move_avg(
+                np.nanmean(
+                    Cld_data_PC_condition_0_median[110:140, :],
+                    axis=0,
+                ),
+                step,
+                mode="same",
+            )
+        ),
+        color="#82A6B1",
+        linewidth=2.5,
+        label="Bad Atmospheric Condition (Median)",
+        linestyle="--",
+        alpha=1,
+    )
+
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np_move_avg(
+                np.nanmean(
+                    Cld_data_PC_condition_1_mean[110:140, :], axis=0
+                ),
+                step,
+                mode="same",
+            )
+        ),
+        color="#5F97D2",
+        linewidth=2.5,
+        label="Moderate Atmospheric Condition (Mean)",
+        alpha=0.95,
+    )
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np_move_avg(
+                np.nanmean(
+                    Cld_data_PC_condition_1_median[110:140, :],
+                    axis=0,
+                ),
+                step,
+                mode="same",
+            )
+        ),
+        color="#5F97D2",
+        linewidth=2.5,
+        label="Moderate Atmospheric Condition (Median)",
+        linestyle="--",
+        alpha=0.95,
+    )
+
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np_move_avg(
+                np.nanmean(
+                    Cld_data_PC_condition_2_mean[110:140, :], axis=0
+                ),
+                step,
+                mode="same",
+            )
+        ),
+        color="#9394E7",
+        linewidth=2.5,
+        label="Good Atmospheric Condition (Mean)",
+        alpha=0.95,
+    )
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np_move_avg(
+                np.nanmean(
+                    Cld_data_PC_condition_2_median[110:140, :],
+                    axis=0,
+                ),
+                step,
+                mode="same",
+            )
+        ),
+        color="#9394E7",
+        linewidth=2.5,
+        label="Good Atmospheric Condition (Median)",
+        linestyle="--",
+        alpha=0.95,
+    )
+
+    # Auxiliary lines representing the data without PC1 constrain and 0
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np.nanmean(Cld_data_aux[110:150, :], axis=0)
+        ),
+        color="#D76364",
+        label="Without PC constraint",
+        linewidth=2.5,
+    )
+    axs[0].plot(
+        np.linspace(-180, 179, 360),
+        np.zeros(360),
+        color="Black",
+        # label="Without PC constraint",
+        linewidth=3,
+    )
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np.nanmean(Cld_data_aux[110:150, :], axis=0)
+        ),
+        color="#D76364",
+        label="Without PC constraint",
+        linewidth=2.5,
+    )
+    axs[1].plot(
+        np.linspace(-180, 179, 360),
+        np.zeros(360),
+        color="Black",
+        # label="Without PC constraint",
+        linewidth=3,
+    )
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        nan_array_normalize(
+            np.nanmean(Cld_data_aux[110:150, :], axis=0)
+        ),
+        color="#D76364",
+        label="Without PC constraint",
+        linewidth=2.5,
+    )
+    axs[2].plot(
+        np.linspace(-180, 179, 360),
+        np.zeros(360),
+        color="Black",
+        # label="Without PC constraint",
+        linewidth=3,
+    )
+
+    # set the title
+    axs[0].set_title(title, size=26, y=1.02)
+
+    # set ylim for each subplot
+    axs[0].set_ylim(y_lim_lst[0])
+    axs[1].set_ylim(y_lim_lst[1])
+    axs[2].set_ylim(y_lim_lst[2])
+
+    # adjust the subplots to make it more compact
+    fig.subplots_adjust(hspace=0.05)
+
+    # set the universal x axis parameters
+    # set the xlabel to the longitude axis
+    x_ticks_mark = [
+        "180$^\circ$",
+        "120$^\circ$W",
+        "60$^\circ$W",
+        "0$^\circ$",
+        "60$^\circ$E",
+        "120$^\circ$E",
+        "180$^\circ$",
+    ]
+
+    # set the xticks label
+    x_ticks = [-180, -120, -60, 0, 60, 120, 180]
+    # set the xlim
+    plt.xlim([-180, 180])
+    # set the xticks label
+    plt.xlabel("Longitude", size=23)
+    # set the xticks
+    plt.xticks(x_ticks, x_ticks_mark, fontsize=20)
+
+    # set the y axis parameters
+    for axs in axs:
+        # get the y axis limits first
+        y1_min, y1_max = axs.get_ylim()
+
+        # set the background color
+        axs.set_facecolor("white")
+        # set the legend
+        axs.legend(prop={"size": 20})
+        # axs.set_yticks(fontsize=20, weight="bold")
+        axs.tick_params(axis="y", labelsize=20)
+        axs.set_ylabel(Cld_data_name, size=20)
+
+        # plot the secondary y axis
+        axs_sec_y = axs.twinx()
+
+        # fill between the line of aviation_kmflown_2019_2020_1_2_month and the y axis 0
+        if title == "January-February":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_1_2_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_1_2_month,
+                0,
+                where=aviation_kmflown_2020_2019_1_2_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_1_2_month,
+                0,
+                where=aviation_kmflown_2020_2019_1_2_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+        elif title == "March-April":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_3_4_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_3_4_month,
+                0,
+                where=aviation_kmflown_2020_2019_3_4_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_3_4_month,
+                0,
+                where=aviation_kmflown_2020_2019_3_4_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+        elif title == "May-June":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_5_6_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_5_6_month,
+                0,
+                where=aviation_kmflown_2020_2019_5_6_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_5_6_month,
+                0,
+                where=aviation_kmflown_2020_2019_5_6_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+        elif title == "July-August":
+            # calculate the ratio of the two y axis
+            zoom_ratio = (
+                np.nanmax(
+                    np.abs(aviation_kmflown_2020_2019_7_8_month)
+                )
+            ) / (np.abs(y1_min) * 0.9)
+
+            # set the secondary y axis parameters
+            axs_sec_y.set_ylim(
+                y1_min * zoom_ratio, y1_max * zoom_ratio
+            )
+            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
+            axs_sec_y.tick_params(axis="y", labelsize=20)
+
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_7_8_month,
+                0,
+                where=aviation_kmflown_2020_2019_7_8_month >= 0,
+                interpolate=True,
+                color="#EDBFC6",
+                alpha=0.65,
+            )
+            axs_sec_y.fill_between(
+                np.linspace(-180, 179, 360),
+                aviation_kmflown_2020_2019_7_8_month,
+                0,
+                where=aviation_kmflown_2020_2019_7_8_month <= 0,
+                interpolate=True,
+                color="#545863",
+                alpha=0.3,
+            )
+
+    plt.savefig(
+        "/RAID01/data/python_fig/"
+        + Cld_data_name
+        + title
+        + "_mean_median_fill_aviation_no_compare_2017_2019.png",
+        dpi=300,
+        facecolor="white",
+        edgecolor="white",
+        bbox_inches="tight",
+    )
+    plt.show()
+
+
 def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_improve(
     Cld_data_PC_condition_0_mean,
     Cld_data_PC_condition_1_mean,
@@ -3043,447 +3986,6 @@ def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_m
         + Cld_data_name
         + title
         + "_mean_median_fill_aviation_improve.png",
-        dpi=300,
-        facecolor="white",
-        edgecolor="white",
-        bbox_inches="tight",
-    )
-    plt.show()
-
-
-def compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_no_compare(
-    Cld_data_PC_condition_0_mean,
-    Cld_data_PC_condition_1_mean,
-    Cld_data_PC_condition_2_mean,
-    Cld_data_PC_condition_0_median,
-    Cld_data_PC_condition_1_median,
-    Cld_data_PC_condition_2_median,
-    Cld_data_aux,
-    Cld_data_name,
-    y_lim_lst,
-    title,
-    step,
-):
-    """
-    Plot mean cld anormaly from lat 20 to 60
-    Now we try 20 to 50 to reduce noise
-
-    Parameters
-    ----------
-    Cld_data : numpy array
-        Cld data from different years, shape in (lat, lon)
-    step : int
-        step of moving average
-    """
-
-    # Test the aviation fly distance data from 2019 and 2020
-    # Data is from "10.1029/2021AV000546"
-    aviation_data_2019 = read_nc_data(
-        file_path="/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/Aviation/data/flight/kmflown_cruising_2019.nc"
-    )
-    aviation_data_2020 = read_nc_data(
-        file_path="/RAID01/data/muqy/PYTHON_CODE/Highcloud_Contrail/Aviation/data/flight/kmflown_cruising_2020.nc"
-    )
-
-    aviation_kmflown_2019 = aviation_data_2019["cruise"]
-    aviation_kmflown_2020 = aviation_data_2020["cruise"]
-
-    # ------------------ get the difference between 2019 and 2020 ------------------
-    difference_2020_2019 = np.empty((240, 180, 360))
-    difference_2020_2019 = np.array(
-        aviation_kmflown_2020[:240, :, :]
-    ) - np.array(aviation_kmflown_2019[:240, :, :])
-
-    # get the difference between 2019 and 2020 in jan and feb only
-    difference_2020_2019_jan_feb = difference_2020_2019[:60, :, :]
-    difference_2020_2019_mar_apr = difference_2020_2019[
-        60:120, :, :
-    ]
-    difference_2020_2019_may_jun = difference_2020_2019[
-        120:180, :, :
-    ]
-    difference_2020_2019_jul_aug = difference_2020_2019[
-        180:240, :, :
-    ]
-
-    # 1 - 2 month
-    aviation_kmflown_2020_2019_1_2_month = np.nanmean(
-        difference_2020_2019_jan_feb[:, 110:140, :],
-        axis=(0, 1),
-    )
-    # 3 - 4 month
-    aviation_kmflown_2020_2019_3_4_month = np.nanmean(
-        difference_2020_2019_mar_apr[:, 110:140, :],
-        axis=(0, 1),
-    )
-    # 5 - 6 month
-    aviation_kmflown_2020_2019_5_6_month = np.nanmean(
-        difference_2020_2019_may_jun[:, 110:140, :],
-        axis=(0, 1),
-    )
-    # 7 - 8 month
-    aviation_kmflown_2020_2019_7_8_month = np.nanmean(
-        difference_2020_2019_jul_aug[:, 110:140, :],
-        axis=(0, 1),
-    )
-
-    # Deal data to central in 0 longitude
-    mpl.rc("font", family="Times New Roman")
-
-    def shift_array_columns(arr, n):
-        """Shift the columns of an array by n positions."""
-        return np.concatenate((arr[:, n:], arr[:, :n]), axis=1)
-
-    # Usage, flip the array 180 degrees
-    Cld_data_PC_condition_0_mean = shift_array_columns(
-        Cld_data_PC_condition_0_mean, 180
-    )
-    Cld_data_PC_condition_1_mean = shift_array_columns(
-        Cld_data_PC_condition_1_mean, 180
-    )
-    Cld_data_PC_condition_2_mean = shift_array_columns(
-        Cld_data_PC_condition_2_mean, 180
-    )
-
-    Cld_data_PC_condition_0_median = shift_array_columns(
-        Cld_data_PC_condition_0_median, 180
-    )
-    Cld_data_PC_condition_1_median = shift_array_columns(
-        Cld_data_PC_condition_1_median, 180
-    )
-    Cld_data_PC_condition_2_median = shift_array_columns(
-        Cld_data_PC_condition_2_median, 180
-    )
-
-    Cld_data_aux = shift_array_columns(Cld_data_aux, 180)
-
-    # plot the figure
-    fig, axs = plt.subplots(
-        figsize=(18, 15), nrows=3, ncols=1, sharex=True
-    )
-
-    # plot lines
-    axs[0].plot(
-        np.linspace(-180, 179, 360),
-        np_move_avg(
-            np.nanmean(
-                Cld_data_PC_condition_0_mean[110:140, :], axis=0
-            ),
-            step,
-            mode="same",
-        ),
-        color="#82A6B1",
-        linewidth=2.5,
-        label="Bad Atmospheric Condition (Mean)",
-        alpha=1,
-    )
-    axs[0].plot(
-        np.linspace(-180, 179, 360),
-        np_move_avg(
-            np.nanmean(
-                Cld_data_PC_condition_0_median[110:140, :], axis=0
-            ),
-            step,
-            mode="same",
-        ),
-        color="#82A6B1",
-        linewidth=2.5,
-        label="Bad Atmospheric Condition (Median)",
-        linestyle="--",
-        alpha=1,
-    )
-
-    axs[1].plot(
-        np.linspace(-180, 179, 360),
-        np_move_avg(
-            np.nanmean(
-                Cld_data_PC_condition_1_mean[110:140, :], axis=0
-            ),
-            step,
-            mode="same",
-        ),
-        color="#5F97D2",
-        linewidth=2.5,
-        label="Moderate Atmospheric Condition (Mean)",
-        alpha=0.95,
-    )
-    axs[1].plot(
-        np.linspace(-180, 179, 360),
-        np_move_avg(
-            np.nanmean(
-                Cld_data_PC_condition_1_median[110:140, :], axis=0
-            ),
-            step,
-            mode="same",
-        ),
-        color="#5F97D2",
-        linewidth=2.5,
-        label="Moderate Atmospheric Condition (Median)",
-        linestyle="--",
-        alpha=0.95,
-    )
-
-    axs[2].plot(
-        np.linspace(-180, 179, 360),
-        np_move_avg(
-            np.nanmean(
-                Cld_data_PC_condition_2_mean[110:140, :], axis=0
-            ),
-            step,
-            mode="same",
-        ),
-        color="#9394E7",
-        linewidth=2.5,
-        label="Good Atmospheric Condition (Mean)",
-        alpha=0.95,
-    )
-    axs[2].plot(
-        np.linspace(-180, 179, 360),
-        np_move_avg(
-            np.nanmean(
-                Cld_data_PC_condition_2_median[110:140, :], axis=0
-            ),
-            step,
-            mode="same",
-        ),
-        color="#9394E7",
-        linewidth=2.5,
-        label="Good Atmospheric Condition (Median)",
-        linestyle="--",
-        alpha=0.95,
-    )
-
-    # Auxiliary lines representing the data without PC1 constrain and 0
-    # axs[0].plot(
-    #     np.linspace(-180, 179, 360),
-    #     np.nanmean(Cld_data_aux[110:150, :], axis=0),
-    #     color="#D76364",
-    #     label="Without PC constraint",
-    #     linewidth=2.5,
-    # )
-    axs[0].plot(
-        np.linspace(-180, 179, 360),
-        np.zeros(360),
-        color="Black",
-        # label="Without PC constraint",
-        linewidth=3,
-    )
-    # axs[1].plot(
-    #     np.linspace(-180, 179, 360),
-    #     np.nanmean(Cld_data_aux[110:150, :], axis=0),
-    #     color="#D76364",
-    #     label="Without PC constraint",
-    #     linewidth=2.5,
-    # )
-    axs[1].plot(
-        np.linspace(-180, 179, 360),
-        np.zeros(360),
-        color="Black",
-        # label="Without PC constraint",
-        linewidth=3,
-    )
-    # axs[2].plot(
-    #     np.linspace(-180, 179, 360),
-    #     np.nanmean(Cld_data_aux[110:150, :], axis=0),
-    #     color="#D76364",
-    #     label="Without PC constraint",
-    #     linewidth=2.5,
-    # )
-    axs[2].plot(
-        np.linspace(-180, 179, 360),
-        np.zeros(360),
-        color="Black",
-        # label="Without PC constraint",
-        linewidth=3,
-    )
-
-    # set the title
-    axs[0].set_title(title, size=26, y=1.02)
-
-    # set ylim for each subplot
-    # axs[0].set_ylim(y_lim_lst[0])
-    # axs[1].set_ylim(y_lim_lst[1])
-    # axs[2].set_ylim(y_lim_lst[2])
-
-    # adjust the subplots to make it more compact
-    fig.subplots_adjust(hspace=0.05)
-
-    # set the universal x axis parameters
-    # set the xlabel to the longitude axis
-    x_ticks_mark = [
-        "180$^\circ$",
-        "120$^\circ$W",
-        "60$^\circ$W",
-        "0$^\circ$",
-        "60$^\circ$E",
-        "120$^\circ$E",
-        "180$^\circ$",
-    ]
-
-    # set the xticks label
-    x_ticks = [-180, -120, -60, 0, 60, 120, 180]
-    # set the xlim
-    plt.xlim([-180, 180])
-    # set the xticks label
-    plt.xlabel("Longitude", size=23)
-    # set the xticks
-    plt.xticks(x_ticks, x_ticks_mark, fontsize=20)
-
-    # set the y axis parameters
-    for axs in axs:
-        # get the y axis limits first
-        y1_min, y1_max = axs.get_ylim()
-
-        # set the background color
-        axs.set_facecolor("white")
-        # set the legend
-        axs.legend(prop={"size": 20})
-        # axs.set_yticks(fontsize=20, weight="bold")
-        axs.tick_params(axis="y", labelsize=20)
-        axs.set_ylabel(Cld_data_name, size=20)
-
-        # plot the secondary y axis
-        axs_sec_y = axs.twinx()
-
-        # fill between the line of aviation_kmflown_2019_2020_1_2_month and the y axis 0
-        if title == "January-February":
-            # calculate the ratio of the two y axis
-            zoom_ratio = (
-                np.nanmax(
-                    np.abs(aviation_kmflown_2020_2019_1_2_month)
-                )
-            ) / (np.abs(y1_min) * 0.9)
-
-            # set the secondary y axis parameters
-            axs_sec_y.set_ylim(
-                y1_min * zoom_ratio, y1_max * zoom_ratio
-            )
-            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
-            axs_sec_y.tick_params(axis="y", labelsize=20)
-
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_1_2_month,
-                0,
-                where=aviation_kmflown_2020_2019_1_2_month >= 0,
-                interpolate=True,
-                color="#EDBFC6",
-                alpha=0.65,
-            )
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_1_2_month,
-                0,
-                where=aviation_kmflown_2020_2019_1_2_month <= 0,
-                interpolate=True,
-                color="#545863",
-                alpha=0.3,
-            )
-        elif title == "March-April":
-            # calculate the ratio of the two y axis
-            zoom_ratio = (
-                np.nanmax(
-                    np.abs(aviation_kmflown_2020_2019_3_4_month)
-                )
-            ) / (np.abs(y1_min) * 0.9)
-
-            # set the secondary y axis parameters
-            axs_sec_y.set_ylim(
-                y1_min * zoom_ratio, y1_max * zoom_ratio
-            )
-            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
-            axs_sec_y.tick_params(axis="y", labelsize=20)
-
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_3_4_month,
-                0,
-                where=aviation_kmflown_2020_2019_3_4_month >= 0,
-                interpolate=True,
-                color="#EDBFC6",
-                alpha=0.65,
-            )
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_3_4_month,
-                0,
-                where=aviation_kmflown_2020_2019_3_4_month <= 0,
-                interpolate=True,
-                color="#545863",
-                alpha=0.3,
-            )
-        elif title == "May-June":
-            # calculate the ratio of the two y axis
-            zoom_ratio = (
-                np.nanmax(
-                    np.abs(aviation_kmflown_2020_2019_5_6_month)
-                )
-            ) / (np.abs(y1_min) * 0.9)
-
-            # set the secondary y axis parameters
-            axs_sec_y.set_ylim(
-                y1_min * zoom_ratio, y1_max * zoom_ratio
-            )
-            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
-            axs_sec_y.tick_params(axis="y", labelsize=20)
-
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_5_6_month,
-                0,
-                where=aviation_kmflown_2020_2019_5_6_month >= 0,
-                interpolate=True,
-                color="#EDBFC6",
-                alpha=0.65,
-            )
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_5_6_month,
-                0,
-                where=aviation_kmflown_2020_2019_5_6_month <= 0,
-                interpolate=True,
-                color="#545863",
-                alpha=0.3,
-            )
-        elif title == "July-August":
-            # calculate the ratio of the two y axis
-            zoom_ratio = (
-                np.nanmax(
-                    np.abs(aviation_kmflown_2020_2019_7_8_month)
-                )
-            ) / (np.abs(y1_min) * 0.9)
-
-            # set the secondary y axis parameters
-            axs_sec_y.set_ylim(
-                y1_min * zoom_ratio, y1_max * zoom_ratio
-            )
-            axs_sec_y.set_ylabel("Aviation Distance (km)", size=23)
-            axs_sec_y.tick_params(axis="y", labelsize=20)
-
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_7_8_month,
-                0,
-                where=aviation_kmflown_2020_2019_7_8_month >= 0,
-                interpolate=True,
-                color="#EDBFC6",
-                alpha=0.65,
-            )
-            axs_sec_y.fill_between(
-                np.linspace(-180, 179, 360),
-                aviation_kmflown_2020_2019_7_8_month,
-                0,
-                where=aviation_kmflown_2020_2019_7_8_month <= 0,
-                interpolate=True,
-                color="#545863",
-                alpha=0.3,
-            )
-
-    plt.savefig(
-        "/RAID01/data/python_fig/"
-        + Cld_data_name
-        + title
-        + "_mean_median_fill_aviation_no_compare_2010_2020.png",
         dpi=300,
         facecolor="white",
         edgecolor="white",

@@ -43,6 +43,7 @@
         
 """
 
+# import modules
 from statistics import mean
 
 import matplotlib as mpl
@@ -64,13 +65,6 @@ from muqy_20221026_func_filter_hcf_anormal_data import (
 from PIL import Image
 from scipy import stats
 from scipy.stats import norm
-from sklearn.metrics import (
-    explained_variance_score,
-    mean_absolute_error,
-    mean_squared_error,
-    median_absolute_error,
-    r2_score,
-)
 
 # --------- import done ------------
 # --------- Plot style -------------
@@ -82,6 +76,7 @@ mpl.style.use("seaborn-v0_8-ticks")
 # ---------- Read PCA&CLD data from netcdf file --------
 
 # ---------- Read in Cloud area data ----------
+# now we read IWP and other cld data (not IWP) from netcdf file
 (
     # pc
     PC_all,
@@ -89,7 +84,11 @@ mpl.style.use("seaborn-v0_8-ticks")
     # cld
     Cld_all,
     Cld_years,
+    # iwp
+    IWP_data,
+    IWP_years,
 ) = read_PC1_CERES_from_netcdf(CERES_Cld_dataset_num=0)
+
 # 0 for Cldarea dataset, 1 for Cldicerad dataset
 # 2 for Cldtau dataset, 3 for Cldtau_lin dataset, 4 for IWP dataset
 # 5 for Cldemissirad dataset
@@ -106,10 +105,9 @@ pvalue = data["p_values"].values
 
 # Mask the PC1 and Cldarea data where the correlation coefficients are less than 0.45
 # Assuming PC_years is a dictionary with 11 arrays and correlation has shape (180, 360)
-# Assuming PC_years is a dictionary with 11 arrays and correlation has shape (180, 360)
-mask = correlation < 0.45
+mask = correlation < 0.5
 
-for year in range(2010, 2021):
+for year in range(2017, 2021):
     PC_years[year] = np.ma.masked_array(
         PC_years[year],
         mask=np.repeat(
@@ -123,11 +121,101 @@ for year in range(2010, 2021):
         ).reshape(12, 28, 180, 360),
     )
 
+correlation_masked = np.copy(correlation)
+correlation_masked = np.ma.masked_array(
+    correlation_masked, mask=mask
+)
+
+
+def plot_Cld_no_mean_simple_full_hemisphere_self_cmap(
+    Cld_match_PC_gap,
+    # p_value,
+    cld_min,
+    cld_max,
+    cld_name,
+    cmap_file="/RAID01/data/muqy/color/test.txt",
+):
+    lon = np.linspace(0, 359, 360)
+    lat = np.linspace(-90, 89, 180)
+
+    lons, lats = np.meshgrid(lon, lat)
+
+    cmap = dcmap(cmap_file)
+    cmap.set_bad("gray", alpha=0)
+    # cmap.set_over("#800000")
+    # cmap.set_under("#191970")
+    # cmap.set_under("white")
+
+    fig, (ax1) = plt.subplots(
+        ncols=1,
+        nrows=1,
+        figsize=(11, 4),
+        constrained_layout=True,
+    )
+    plt.rcParams.update({"font.family": "Times New Roman"})
+
+    ax1 = plt.subplot(
+        111,
+        projection=ccrs.PlateCarree(central_longitude=0),
+    )
+    ax1.set_facecolor("silver")
+    # ax1.set_global()
+    b = ax1.pcolormesh(
+        lon,
+        lat,
+        Cld_match_PC_gap,
+        transform=ccrs.PlateCarree(),
+        cmap=cmap,
+        vmin=cld_min,
+        vmax=cld_max,
+    )
+    ax1.coastlines(resolution="50m", lw=0.9)
+
+    # dot the significant area
+    # dot_area = np.where(p_value < 0.00000005)
+    # dot = ax1.scatter(
+    #     lons[dot_area],
+    #     lats[dot_area],
+    #     color="k",
+    #     s=3,
+    #     linewidths=0,
+    #     transform=ccrs.PlateCarree(),
+    # )
+
+    gl = ax1.gridlines(
+        linestyle="-.", lw=0.2, alpha=0.5, draw_labels=True
+    )
+    gl.top_labels = False
+    cb2 = fig.colorbar(
+        b,
+        ax=ax1,
+        location="right",
+        shrink=0.8,
+        extend="both",
+    )
+    cb2.set_label(label=cld_name, size=24)
+    cb2.ax.tick_params(labelsize=24)
+
+    # cbar.ax.tick_params(labelsize=24)
+    gl.xlabel_style = {"size": 18}
+    gl.ylabel_style = {"size": 18}
+
+
+plot_Cld_no_mean_simple_full_hemisphere_self_cmap(
+    Cld_match_PC_gap=correlation_masked,
+    # p_value,
+    cld_min=-1,
+    cld_max=1,
+    cld_name="Corr Coef (mask < 0.55)",
+    cmap_file="/RAID01/data/muqy/color/PC1_color.txt",
+)
+
 
 # Extract the PC1 and Cldarea data for each year
 def extract_PC1_CERES_each_year(
     PC_years: dict[int, np.ndarray],
     Cld_years: dict[int, np.ndarray],
+    IWP_years: dict[int, np.ndarray],
 ) -> None:
     """
     Extracts data for principal component 1 (PC1) and cloud data (CERES) for each year from 2010 to 2020,
@@ -146,14 +234,17 @@ def extract_PC1_CERES_each_year(
     --------
     None
     """
-    for year in range(2010, 2021):
+    for year in range(2017, 2021):
         globals()[f"PC_{year}"] = PC_years[year]
 
-    for year in range(2010, 2021):
+    for year in range(2017, 2021):
         globals()[f"Cld_{year}"] = Cld_years[year]
 
+    for year in range(2017, 2021):
+        globals()[f"IWP_{year}"] = IWP_years[year]
 
-extract_PC1_CERES_each_year(PC_years, Cld_years)
+
+extract_PC1_CERES_each_year(PC_years, Cld_years, IWP_years)
 
 #########################################
 ##### start seperate time test ##########
@@ -161,7 +252,7 @@ extract_PC1_CERES_each_year(PC_years, Cld_years)
 
 # region
 # extract 3-4 month data & 5-6 month data & 7-8 month data only
-years = range(2010, 2021)
+years = range(2017, 2021)
 # months to extract
 months_1_2_month = slice(0, 2)
 months_3_4_month = slice(2, 4)
@@ -172,6 +263,7 @@ for year in years:
     # get the data from the global namespace
     pc_data = globals()[f"PC_{year}"]
     cld_data = globals()[f"Cld_{year}"]
+    iwp_data = globals()[f"IWP_{year}"]
 
     # apply the months slice to the data
     # extract 1-2 month data & 3-4 month data & 5-6 month data & 7-8 month data only
@@ -182,12 +274,18 @@ for year in years:
     cld_1_2_month = cld_data.reshape(12, 28, 180, 360)[
         months_1_2_month, :, :, :
     ].reshape(2 * 28, 180, 360)
+    iwp_1_2_month = iwp_data.reshape(12, 28, 180, 360)[
+        months_1_2_month, :, :, :
+    ].reshape(2 * 28, 180, 360)
 
     # 3-4 month data
     pc_3_4_month = pc_data.reshape(12, 28, 180, 360)[
         months_3_4_month, :, :, :
     ].reshape(2 * 28, 180, 360)
     cld_3_4_month = cld_data.reshape(12, 28, 180, 360)[
+        months_3_4_month, :, :, :
+    ].reshape(2 * 28, 180, 360)
+    iwp_3_4_month = iwp_data.reshape(12, 28, 180, 360)[
         months_3_4_month, :, :, :
     ].reshape(2 * 28, 180, 360)
 
@@ -198,6 +296,9 @@ for year in years:
     cld_5_6_month = cld_data.reshape(12, 28, 180, 360)[
         months_5_6_month, :, :, :
     ].reshape(2 * 28, 180, 360)
+    iwp_5_6_month = iwp_data.reshape(12, 28, 180, 360)[
+        months_5_6_month, :, :, :
+    ].reshape(2 * 28, 180, 360)
 
     # 7-8 month data
     pc_7_8_month = pc_data.reshape(12, 28, 180, 360)[
@@ -206,113 +307,286 @@ for year in years:
     cld_7_8_month = cld_data.reshape(12, 28, 180, 360)[
         months_7_8_month, :, :, :
     ].reshape(2 * 28, 180, 360)
+    iwp_7_8_month = iwp_data.reshape(12, 28, 180, 360)[
+        months_7_8_month, :, :, :
+    ].reshape(2 * 28, 180, 360)
 
     # assign the data to the global namespace
     globals()[f"PC_{year}_1_2_month"] = pc_1_2_month
     globals()[f"Cld_{year}_1_2_month"] = cld_1_2_month
+    globals()[f"IWP_{year}_1_2_month"] = iwp_1_2_month
 
     globals()[f"PC_{year}_3_4_month"] = pc_3_4_month
     globals()[f"Cld_{year}_3_4_month"] = cld_3_4_month
+    globals()[f"IWP_{year}_3_4_month"] = iwp_3_4_month
 
     globals()[f"PC_{year}_5_6_month"] = pc_5_6_month
     globals()[f"Cld_{year}_5_6_month"] = cld_5_6_month
+    globals()[f"IWP_{year}_5_6_month"] = iwp_5_6_month
 
     globals()[f"PC_{year}_7_8_month"] = pc_7_8_month
     globals()[f"Cld_{year}_7_8_month"] = cld_7_8_month
-
-
-plot_Cld_no_mean_simple_full_hemisphere_self_cmap(
-    Cld_match_PC_gap=PC_2018_3_4_month[0, :, :],
-    # p_value,
-    cld_min=-2,
-    cld_max=5.5,
-    cld_name="Cloud fraction",
-    cmap_file="/RAID01/data/muqy/color/test.txt",
-)
-
-plot_Cld_no_mean_simple_full_hemisphere_self_cmap(
-    Cld_match_PC_gap=Cld_2018_3_4_month[0, :, :],
-    # p_value,
-    cld_min=0,
-    cld_max=80,
-    cld_name="Cloud fraction",
-    cmap_file="/RAID01/data/muqy/color/test.txt",
-)
+    globals()[f"IWP_{year}_7_8_month"] = iwp_7_8_month
 
 
 # concatenate 1-2 month & 3-4 month & 5-6 month & 7-8 month data
 # to form a 2010->2019 dataset
-PC_2010_2019_1_2_month = np.concatenate(
+PC_2017_2019_1_2_month = np.concatenate(
     [
         globals()[f"PC_{year}_1_2_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
-Cld_2010_2019_1_2_month = np.concatenate(
+Cld_2017_2019_1_2_month = np.concatenate(
     [
         globals()[f"Cld_{year}_1_2_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
+    ],
+    axis=0,
+)
+IWP_2017_2019_1_2_month = np.concatenate(
+    [
+        globals()[f"IWP_{year}_1_2_month"]
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
 
-PC_2010_2019_3_4_month = np.concatenate(
+PC_2017_2019_3_4_month = np.concatenate(
     [
         globals()[f"PC_{year}_3_4_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
-Cld_2010_2019_3_4_month = np.concatenate(
+Cld_2017_2019_3_4_month = np.concatenate(
     [
         globals()[f"Cld_{year}_3_4_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
+    ],
+    axis=0,
+)
+IWP_2017_2019_3_4_month = np.concatenate(
+    [
+        globals()[f"IWP_{year}_3_4_month"]
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
 
-PC_2010_2019_5_6_month = np.concatenate(
+PC_2017_2019_5_6_month = np.concatenate(
     [
         globals()[f"PC_{year}_5_6_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
-Cld_2010_2019_5_6_month = np.concatenate(
+Cld_2017_2019_5_6_month = np.concatenate(
     [
         globals()[f"Cld_{year}_5_6_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
+    ],
+    axis=0,
+)
+IWP_2017_2019_5_6_month = np.concatenate(
+    [
+        globals()[f"IWP_{year}_5_6_month"]
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
 
-PC_2010_2019_7_8_month = np.concatenate(
+PC_2017_2019_7_8_month = np.concatenate(
     [
         globals()[f"PC_{year}_7_8_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
-Cld_2010_2019_7_8_month = np.concatenate(
+Cld_2017_2019_7_8_month = np.concatenate(
     [
         globals()[f"Cld_{year}_7_8_month"]
-        for year in range(2010, 2020)
+        for year in range(2017, 2020)
+    ],
+    axis=0,
+)
+IWP_2017_2019_7_8_month = np.concatenate(
+    [
+        globals()[f"IWP_{year}_7_8_month"]
+        for year in range(2017, 2020)
     ],
     axis=0,
 )
 # endregion
 
 # ------ Segmentation of cloud data within each PC interval ---------------------------------
-#
-filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
-    Cld_data=Cld_2010.reshape(-1, 180, 360),
-    start=-2.5,
-    end=5.5,
-    gap=0.05,
-)
+#### triout for IWP constrain the same time with PC1 gap constrain ####
 
 # region
+filter_data_fit_PC1_gap_IWP_constrain = (
+    Filter_data_fit_PC1_gap_plot_IWP_constrain(
+        Cld_data=Cld_2018.reshape(-1, 180, 360),
+        start=-2.5,
+        end=5.5,
+        gap=0.05,
+    )
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_1_2_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_1_2_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_1_2_month,
+    PC_data=PC_2020_1_2_month,
+    IWP_data=IWP_2020_1_2_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_1_2_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constrain_1_2_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_1_2_month,
+    PC_data=PC_2017_2019_1_2_month,
+    IWP_data=IWP_2017_2019_1_2_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_3_4_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_3_4_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_3_4_month,
+    PC_data=PC_2020_3_4_month,
+    IWP_data=IWP_2020_3_4_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_3_4_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constrain_3_4_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_3_4_month,
+    PC_data=PC_2017_2019_3_4_month,
+    IWP_data=IWP_2017_2019_3_4_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_5_6_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_5_6_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_5_6_month,
+    PC_data=PC_2020_5_6_month,
+    IWP_data=IWP_2020_5_6_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_5_6_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constrain_5_6_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_5_6_month,
+    PC_data=PC_2017_2019_5_6_month,
+    IWP_data=IWP_2017_2019_5_6_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_7_8_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_7_8_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_7_8_month,
+    PC_data=PC_2020_7_8_month,
+    IWP_data=IWP_2020_7_8_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_7_8_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constrain_7_8_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_7_8_month,
+    PC_data=PC_2017_2019_7_8_month,
+    IWP_data=IWP_2017_2019_7_8_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_9_10_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_9_10_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_9_10_month,
+    PC_data=PC_2020_9_10_month,
+    IWP_data=IWP_2020_9_10_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_9_10_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constrain_9_10_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_9_10_month,
+    PC_data=PC_2017_2019_9_10_month,
+    IWP_data=IWP_2017_2019_9_10_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_11_12_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_11_12_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_11_12_month,
+    PC_data=PC_2020_11_12_month,
+    IWP_data=IWP_2020_11_12_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_11_12_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constraint_11_12_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_11_12_month,
+    PC_data=PC_2017_2019_11_12_month,
+    IWP_data=IWP_2017_2019_11_12_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2020_match_PC_gap_IWP_constrain_1_2_month_mean,
+    PC_2020_match_PC_gap_IWP_constrain_1_2_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2020_1_2_month,
+    PC_data=PC_2020_1_2_month,
+    IWP_data=IWP_2020_1_2_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
+(
+    Cld_2017_2019_match_PC_gap_IWP_constrain_1_2_month_mean,
+    PC_2017_2019_match_PC_gap_IWP_constrain_1_2_month_mean,
+) = filter_data_fit_PC1_gap_IWP_constrain.Filter_data_fit_PC1_gap_new(
+    Cld_data=Cld_2017_2019_1_2_month,
+    PC_data=PC_2017_2019_1_2_month,
+    IWP_data=IWP_2017_2019_1_2_month,
+    IWP_min=0.0,
+    IWP_max=0.1,
+)
+
 # 1 - 2 month
 (
     Cld_2020_match_PC_gap_1_2_month_median,
@@ -323,11 +597,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_1_2_month_median,
-    PC_2010_2019_match_PC_gap_1_2_month_median,
+    Cld_2017_2019_match_PC_gap_1_2_month_median,
+    PC_2017_2019_match_PC_gap_1_2_month_median,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new_median(
-    Cld_data=Cld_2010_2019_1_2_month,
-    PC_data=PC_2010_2019_1_2_month,
+    Cld_data=Cld_2017_2019_1_2_month,
+    PC_data=PC_2017_2019_1_2_month,
 )
 
 (
@@ -339,11 +613,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_1_2_month_mean,
-    PC_2010_2019_match_PC_gap_1_2_month_mean,
+    Cld_2017_2019_match_PC_gap_1_2_month_mean,
+    PC_2017_2019_match_PC_gap_1_2_month_mean,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new(
-    Cld_data=Cld_2010_2019_1_2_month,
-    PC_data=PC_2010_2019_1_2_month,
+    Cld_data=Cld_2017_2019_1_2_month,
+    PC_data=PC_2017_2019_1_2_month,
 )
 
 # 3 - 4 month
@@ -356,11 +630,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_3_4_month_median,
-    PC_2010_2019_match_PC_gap_3_4_month_median,
+    Cld_2017_2019_match_PC_gap_3_4_month_median,
+    PC_2017_2019_match_PC_gap_3_4_month_median,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new_median(
-    Cld_data=Cld_2010_2019_3_4_month,
-    PC_data=PC_2010_2019_3_4_month,
+    Cld_data=Cld_2017_2019_3_4_month,
+    PC_data=PC_2017_2019_3_4_month,
 )
 
 (
@@ -372,11 +646,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_3_4_month_mean,
-    PC_2010_2019_match_PC_gap_3_4_month_mean,
+    Cld_2017_2019_match_PC_gap_3_4_month_mean,
+    PC_2017_2019_match_PC_gap_3_4_month_mean,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new(
-    Cld_data=Cld_2010_2019_3_4_month,
-    PC_data=PC_2010_2019_3_4_month,
+    Cld_data=Cld_2017_2019_3_4_month,
+    PC_data=PC_2017_2019_3_4_month,
 )
 
 # 5 - 6 month
@@ -389,11 +663,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_5_6_month_median,
-    PC_2010_2019_match_PC_gap_5_6_month_median,
+    Cld_2017_2019_match_PC_gap_5_6_month_median,
+    PC_2017_2019_match_PC_gap_5_6_month_median,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new_median(
-    Cld_data=Cld_2010_2019_5_6_month,
-    PC_data=PC_2010_2019_5_6_month,
+    Cld_data=Cld_2017_2019_5_6_month,
+    PC_data=PC_2017_2019_5_6_month,
 )
 
 (
@@ -405,11 +679,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_5_6_month_mean,
-    PC_2010_2019_match_PC_gap_5_6_month_mean,
+    Cld_2017_2019_match_PC_gap_5_6_month_mean,
+    PC_2017_2019_match_PC_gap_5_6_month_mean,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new(
-    Cld_data=Cld_2010_2019_5_6_month,
-    PC_data=PC_2010_2019_5_6_month,
+    Cld_data=Cld_2017_2019_5_6_month,
+    PC_data=PC_2017_2019_5_6_month,
 )
 
 # 7 - 8 month
@@ -422,11 +696,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_7_8_month_median,
-    PC_2010_2019_match_PC_gap_7_8_month_median,
+    Cld_2017_2019_match_PC_gap_7_8_month_median,
+    PC_2017_2019_match_PC_gap_7_8_month_median,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new_median(
-    Cld_data=Cld_2010_2019_7_8_month,
-    PC_data=PC_2010_2019_7_8_month,
+    Cld_data=Cld_2017_2019_7_8_month,
+    PC_data=PC_2017_2019_7_8_month,
 )
 
 (
@@ -438,11 +712,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_2010_2019_match_PC_gap_7_8_month_mean,
-    PC_2010_2019_match_PC_gap_7_8_month_mean,
+    Cld_2017_2019_match_PC_gap_7_8_month_mean,
+    PC_2017_2019_match_PC_gap_7_8_month_mean,
 ) = filter_data_fit_PC1_gap_plot.Filter_data_fit_PC1_gap_new(
-    Cld_data=Cld_2010_2019_7_8_month,
-    PC_data=PC_2010_2019_7_8_month,
+    Cld_data=Cld_2017_2019_7_8_month,
+    PC_data=PC_2017_2019_7_8_month,
 )
 # endregion
 
@@ -458,11 +732,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 
 # region
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_1_2_month_median,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_1_2_month_median,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_1_2_month_median
+    Cld_2017_2019_match_PC_gap_1_2_month_median
 )
 (
     Cld_lowermost_error_2020,
@@ -473,11 +747,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_1_2_month_mean,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_1_2_month_mean,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_1_2_month_mean
+    Cld_2017_2019_match_PC_gap_1_2_month_mean
 )
 (
     Cld_lowermost_error_2020,
@@ -488,11 +762,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_3_4_month_median,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_3_4_month_median,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_3_4_month_median
+    Cld_2017_2019_match_PC_gap_3_4_month_median
 )
 (
     Cld_lowermost_error_2020,
@@ -503,11 +777,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_3_4_month_mean,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_3_4_month_mean,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_3_4_month_mean
+    Cld_2017_2019_match_PC_gap_3_4_month_mean
 )
 (
     Cld_lowermost_error_2020,
@@ -518,11 +792,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_5_6_month_median,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_5_6_month_median,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_5_6_month_median
+    Cld_2017_2019_match_PC_gap_5_6_month_median
 )
 (
     Cld_lowermost_error_2020,
@@ -533,11 +807,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_5_6_month_mean,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_5_6_month_mean,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_5_6_month_mean
+    Cld_2017_2019_match_PC_gap_5_6_month_mean
 )
 (
     Cld_lowermost_error_2020,
@@ -548,11 +822,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_7_8_month_median,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_7_8_month_median,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_7_8_month_median
+    Cld_2017_2019_match_PC_gap_7_8_month_median
 )
 (
     Cld_lowermost_error_2020,
@@ -563,11 +837,11 @@ filter_data_fit_PC1_gap_plot = Filter_data_fit_PC1_gap_plot(
 )
 
 (
-    Cld_lowermost_error_2010_2019,
-    Cld_highermost_error_2010_2019,
-    Cld_2010_2019_match_PC_gap_filtered_7_8_month_mean,
+    Cld_lowermost_error_2017_2019,
+    Cld_highermost_error_2017_2019,
+    Cld_2017_2019_match_PC_gap_filtered_7_8_month_mean,
 ) = filter_data_PC1_gap_lowermost_highermost_error(
-    Cld_2010_2019_match_PC_gap_7_8_month_mean
+    Cld_2017_2019_match_PC_gap_7_8_month_mean
 )
 (
     Cld_lowermost_error_2020,
@@ -634,7 +908,7 @@ for i in range(0, 3):
         ],
         axis=(0, 1),
     ) - np.nanmean(
-        Cld_2010_2019_match_PC_gap_filtered_1_2_month_mean[
+        Cld_2017_2019_match_PC_gap_filtered_1_2_month_mean[
             int(gap_num_min[i]) : int(gap_num_max[i]), 110:140, :
         ],
         axis=(0, 1),
@@ -648,7 +922,7 @@ for i in range(0, 3):
         ],
         axis=(0, 1),
     ) - np.nanmean(
-        Cld_2010_2019_match_PC_gap_filtered_3_4_month_mean[
+        Cld_2017_2019_match_PC_gap_filtered_3_4_month_mean[
             int(gap_num_min[i]) : int(gap_num_max[i]), 110:140, :
         ],
         axis=(0, 1),
@@ -662,7 +936,7 @@ for i in range(0, 3):
         ],
         axis=(0, 1),
     ) - np.nanmean(
-        Cld_2010_2019_match_PC_gap_filtered_5_6_month_mean[
+        Cld_2017_2019_match_PC_gap_filtered_5_6_month_mean[
             int(gap_num_min[i]) : int(gap_num_max[i]), 110:140, :
         ],
         axis=(0, 1),
@@ -676,7 +950,7 @@ for i in range(0, 3):
         ],
         axis=(0, 1),
     ) - np.nanmean(
-        Cld_2010_2019_match_PC_gap_filtered_7_8_month_mean[
+        Cld_2017_2019_match_PC_gap_filtered_7_8_month_mean[
             int(gap_num_min[i]) : int(gap_num_max[i]), 110:140, :
         ],
         axis=(0, 1),
@@ -703,7 +977,7 @@ for i, atm in enumerate(atm_conditions):
         cld_2020_var = (
             f"Cld_2020_match_PC_gap_filtered_1_2_month_{calc_type}"
         )
-        cld_others_var = f"Cld_2010_2019_match_PC_gap_filtered_1_2_month_{calc_type}"
+        cld_others_var = f"Cld_2017_2019_match_PC_gap_filtered_1_2_month_{calc_type}"
         gap_min_var = gap_num_min[i]
         gap_max_var = gap_num_max[i]
 
@@ -751,7 +1025,7 @@ for i, atm in enumerate(atm_conditions):
         cld_2020_var = (
             f"Cld_2020_match_PC_gap_filtered_3_4_month_{calc_type}"
         )
-        cld_others_var = f"Cld_2010_2019_match_PC_gap_filtered_3_4_month_{calc_type}"
+        cld_others_var = f"Cld_2017_2019_match_PC_gap_filtered_3_4_month_{calc_type}"
         gap_min_var = gap_num_min[i]
         gap_max_var = gap_num_max[i]
 
@@ -799,7 +1073,7 @@ for i, atm in enumerate(atm_conditions):
         cld_2020_var = (
             f"Cld_2020_match_PC_gap_filtered_5_6_month_{calc_type}"
         )
-        cld_others_var = f"Cld_2010_2019_match_PC_gap_filtered_5_6_month_{calc_type}"
+        cld_others_var = f"Cld_2017_2019_match_PC_gap_filtered_5_6_month_{calc_type}"
         gap_min_var = gap_num_min[i]
         gap_max_var = gap_num_max[i]
 
@@ -846,7 +1120,7 @@ for i, atm in enumerate(atm_conditions):
         cld_2020_var = (
             f"Cld_2020_match_PC_gap_filtered_7_8_month_{calc_type}"
         )
-        cld_others_var = f"Cld_2010_2019_match_PC_gap_filtered_7_8_month_{calc_type}"
+        cld_others_var = f"Cld_2017_2019_match_PC_gap_filtered_7_8_month_{calc_type}"
         gap_min_var = gap_num_min[i]
         gap_max_var = gap_num_max[i]
 
@@ -885,7 +1159,6 @@ Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_mean = (
 # --------------------------------------------------------------------------------------------
 # endregion
 
-
 ########################################################################
 ###### Draw the Cld difference between 2020 and 2010-2019 ###############
 ###### But by latitude this time, 20N-60N, Contrail region ##############
@@ -894,9 +1167,13 @@ Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_mean = (
 #########################################################
 ############ smoothed data ##############################
 #########################################################
+# ------------------------------------------------------------
+# plot the aviation fill between version
+# ------------------------------------------------------------
+y_lim_lst = [[-4, 6.5], [-4.5, 6.5], [-5.2, 8]]
 
 # 1-2 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_1_2_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_1_2_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_1_2_month_good_filtered_mean,
@@ -904,14 +1181,15 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_1_2_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_1_2_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_1_2_month, axis=0)
-    - np.nanmean(Cld_2010_2019_1_2_month, axis=0),
+    - np.nanmean(Cld_2017_2019_1_2_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
+    y_lim_lst=y_lim_lst,
     title="January-February",
     step=5,
 )
 
 # 3-4 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_3_4_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_3_4_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_3_4_month_good_filtered_mean,
@@ -919,14 +1197,15 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_3_4_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_3_4_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_3_4_month, axis=0)
-    - np.nanmean(Cld_2010_2019_3_4_month, axis=0),
+    - np.nanmean(Cld_2017_2019_3_4_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
+    y_lim_lst=y_lim_lst,
     title="March-April",
     step=5,
 )
 
 # 5-6 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_5_6_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_5_6_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_5_6_month_good_filtered_mean,
@@ -934,14 +1213,15 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_5_6_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_5_6_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_5_6_month, axis=0)
-    - np.nanmean(Cld_2010_2019_5_6_month, axis=0),
+    - np.nanmean(Cld_2017_2019_5_6_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
+    y_lim_lst=y_lim_lst,
     title="May-June",
     step=5,
 )
 
 # 7-8 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_7_8_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_7_8_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_mean,
@@ -949,8 +1229,9 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean(
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_7_8_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_7_8_month, axis=0)
-    - np.nanmean(Cld_2010_2019_7_8_month, axis=0),
+    - np.nanmean(Cld_2017_2019_7_8_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
+    y_lim_lst=y_lim_lst,
     title="July-August",
     step=5,
 )
@@ -970,7 +1251,7 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_1_2_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_1_2_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_1_2_month, axis=0)
-    - np.nanmean(Cld_2010_2019_1_2_month, axis=0),
+    - np.nanmean(Cld_2017_2019_1_2_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="January-February",
@@ -986,7 +1267,7 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_3_4_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_3_4_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_3_4_month, axis=0)
-    - np.nanmean(Cld_2010_2019_3_4_month, axis=0),
+    - np.nanmean(Cld_2017_2019_3_4_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="March-April",
@@ -1002,7 +1283,7 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_5_6_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_5_6_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_5_6_month, axis=0)
-    - np.nanmean(Cld_2010_2019_5_6_month, axis=0),
+    - np.nanmean(Cld_2017_2019_5_6_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="May-June",
@@ -1018,7 +1299,7 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_7_8_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_7_8_month, axis=0)
-    - np.nanmean(Cld_2010_2019_7_8_month, axis=0),
+    - np.nanmean(Cld_2017_2019_7_8_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="July-August",
@@ -1026,13 +1307,14 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
 )
 
 
+# zscores
 # ------------------------------------------------------------
 # plot the aviation fill between version
 # ------------------------------------------------------------
-y_lim_lst = [[-4, 6.5], [-4.5, 6.5], [-5.2, 8]]
+y_lim_lst = [[-1.15, 1.15], [-1.15, 1.15], [-1.15, 1.15]]
 
 # 1-2 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_zscore(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_1_2_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_1_2_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_1_2_month_good_filtered_mean,
@@ -1040,15 +1322,15 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_1_2_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_1_2_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_1_2_month, axis=0)
-    - np.nanmean(Cld_2010_2019_1_2_month, axis=0),
+    - np.nanmean(Cld_2017_2019_1_2_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="January-February",
-    step=5,
+    step=10,
 )
 
 # 3-4 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_zscore(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_3_4_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_3_4_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_3_4_month_good_filtered_mean,
@@ -1056,15 +1338,15 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_3_4_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_3_4_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_3_4_month, axis=0)
-    - np.nanmean(Cld_2010_2019_3_4_month, axis=0),
+    - np.nanmean(Cld_2017_2019_3_4_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="March-April",
-    step=5,
+    step=10,
 )
 
 # 5-6 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_zscore(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_5_6_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_5_6_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_5_6_month_good_filtered_mean,
@@ -1072,7 +1354,7 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_5_6_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_5_6_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_5_6_month, axis=0)
-    - np.nanmean(Cld_2010_2019_5_6_month, axis=0),
+    - np.nanmean(Cld_2017_2019_5_6_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="May-June",
@@ -1080,7 +1362,7 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
 )
 
 # 7-8 month
-compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation(
+compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_with_actual_aviation_zscore(
     Cld_data_PC_condition_0_mean=Cld_all_match_PC_gap_sub_2020_7_8_month_bad_filtered_mean,
     Cld_data_PC_condition_1_mean=Cld_all_match_PC_gap_sub_2020_7_8_month_moderate_filtered_mean,
     Cld_data_PC_condition_2_mean=Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_mean,
@@ -1088,11 +1370,11 @@ compare_cld_between_PC_condition_by_each_Lat_smoothed_aviation_fill_median_mean_
     Cld_data_PC_condition_1_median=Cld_all_match_PC_gap_sub_2020_7_8_month_moderate_filtered_median,
     Cld_data_PC_condition_2_median=Cld_all_match_PC_gap_sub_2020_7_8_month_good_filtered_median,
     Cld_data_aux=np.nanmean(Cld_2020_7_8_month, axis=0)
-    - np.nanmean(Cld_2010_2019_7_8_month, axis=0),
+    - np.nanmean(Cld_2017_2019_7_8_month, axis=0),
     Cld_data_name=r"$\Delta$" + "HCF(%)",
     y_lim_lst=y_lim_lst,
     title="July-August",
-    step=5,
+    step=10,
 )
 
 # --------------------------------------------
