@@ -3,6 +3,8 @@ Code for analysis of PC constrained high cloud attributes in limited years
 I am trying my best to find any possible signal of contrail reduction because of the COVID-19 pandemic in 2020
 To do so we want to build up strong constrain on meterology field and IWP and AOD in the same time and limit the Cld signal in limited level
 
+Update: I failed this project, no contrail signal can be extracted using this approach, if you want to carry on my tryout, please contact me to get full code and full support, what a pity (┬┬﹏┬┬)
+
 ## Code for Analysis of PC Constrained High Cloud Attributes in Limited Years
 
 The following bullet points provide an overview of the code for analyzing PC constrained high cloud attributes in limited years to investigate the possible signal of contrail reduction due to the COVID-19 pandemic in 2020:
